@@ -32,6 +32,13 @@ if (fs.existsSync(envFilePath)) {
     modified = true;
   }
 
+  // Sanitize NEXT_PUBLIC_SOCKET_URL so browser connects to current origin on Render
+  if (envContent.includes("NEXT_PUBLIC_SOCKET_URL")) {
+    console.log("[Render Build] Neutralizing localhost NEXT_PUBLIC_SOCKET_URL for cloud origin...");
+    envContent = envContent.replace(/NEXT_PUBLIC_SOCKET_URL\s*=\s*["']?[^"'\r\n]+localhost[^"'\r\n]*["']?/g, '# NEXT_PUBLIC_SOCKET_URL="origin"');
+    modified = true;
+  }
+
   if (modified) {
     fs.writeFileSync(envFilePath, envContent, "utf-8");
     console.log("[Render Build] Successfully sanitized .env configuration.");

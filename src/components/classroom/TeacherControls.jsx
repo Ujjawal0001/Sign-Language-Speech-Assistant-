@@ -148,15 +148,18 @@ export default function TeacherControls({
               </select>
             </div>
 
-            <div
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-mono font-semibold border ${
+            <button
+              type="button"
+              onClick={onPauseResumeRecognition}
+              title={isListening ? "Microphone active (click to pause)" : "Microphone muted (click to activate speech recognition)"}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-semibold border transition-all cursor-pointer ${
                 isListening
                   ? isHighContrast
-                    ? "bg-[#FFE27A] text-black border-white"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    ? "bg-[#FFE27A] text-black border-white hover:bg-white"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 ring-2 ring-emerald-400/30"
                   : isHighContrast
-                  ? "bg-white/10 text-white/70 border-white/20"
-                  : "bg-auralis-bg text-auralis-muted border-auralis-border"
+                  ? "bg-white/10 text-white/70 border-white/20 hover:bg-white/20"
+                  : "bg-auralis-bg text-auralis-muted border-auralis-border hover:bg-auralis-surface hover:text-auralis-text"
               }`}
             >
               {isListening ? (
@@ -170,7 +173,7 @@ export default function TeacherControls({
                   <span>MIC MUTED</span>
                 </>
               )}
-            </div>
+            </button>
           </div>
         </div>
 

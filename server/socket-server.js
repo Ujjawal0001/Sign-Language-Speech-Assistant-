@@ -32,82 +32,143 @@ io.on("connection", (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`);
 
   // Join a live lecture room
-  socket.on("join-lecture", ({ lectureId, userId, userName, role }) => {
-    if (!lectureId) return;
+  socket.on("join-lecture", ({ lectureId, classroomId, userId, userName, role }) => {
+    const mainRoom = lectureId || (classroomId ? `class_${classroomId}` : null);
+    if (!mainRoom) return;
 
-    socket.join(lectureId);
-    socket.data = { lectureId, userId, userName, role };
-
-    if (!roomParticipants.has(lectureId)) {
-      roomParticipants.set(lectureId, new Set());
+    socket.join(mainRoom);
+    if (classroomId) {
+      socket.join(`class_${classroomId}`);
     }
-    roomParticipants.get(lectureId).add(socket.id);
+    if (lectureId) {
+      socket.join(lectureId);
+    }
+    socket.data = { lectureId: mainRoom, classroomId, userId, userName, role };
 
-    const count = roomParticipants.get(lectureId).size;
-    console.log(`[Socket] User ${userName || socket.id} (${role}) joined lecture ${lectureId}. Active members: ${count}`);
+    const roomKey = classroomId ? `class_${classroomId}` : mainRoom;
+    if (!roomParticipants.has(roomKey)) {
+      roomParticipants.set(roomKey, new Set());
+    }
+    roomParticipants.get(roomKey).add(socket.id);
+
+    const count = roomParticipants.get(roomKey).size;
+    console.log(`[Socket] User ${userName || socket.id} (${role}) joined ${roomKey}. Active members: ${count}`);
 
     // Notify room of participant count
-    io.to(lectureId).emit("participant-count", { count });
+    io.to(roomKey).emit("participant-count", { count });
+    if (mainRoom !== roomKey) {
+      io.to(mainRoom).emit("participant-count", { count });
+    }
 
     // Notify room of new joiner
-    socket.to(lectureId).emit("user-joined", {
+    socket.to(roomKey).emit("user-joined", {
       userId,
       userName: userName || "A participant",
       role: role || "STUDENT",
     });
   });
 
-  // Interim caption streaming (teacher to students)
-  socket.on("caption-interim", ({ lectureId, text, source }) => {
-    if (!lectureId) return;
-    socket.to(lectureId).emit("caption-interim", {
-      text,
-      source: source || "SPEECH",
-    });
+  // Interim caption streaming (teacher speaking to students in real-time)
+  socket.on("caption-interim", (payload) => {
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      socket.to(r).emit("caption-interim", {
+        text: payload?.text || "",
+        source: payload?.source || "SPEECH",
+      });
+    }
   });
 
   // Final caption segment (speech or gesture)
-  socket.on("caption-final", ({ lectureId, transcript }) => {
-    if (!lectureId || !transcript) return;
-    // Broadcast to everyone in the room (including sender for acknowledgment confirmation)
-    io.to(lectureId).emit("caption-final", transcript);
+  socket.on("caption-final", (payload) => {
+    const transcript = payload?.transcript || payload;
+    if (!transcript) return;
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("caption-final", transcript);
+    }
   });
 
   // Sign Language Gesture detected
-  socket.on("sign-detected", ({ lectureId, gesture, confidence, timestamp }) => {
-    if (!lectureId || !gesture) return;
-    io.to(lectureId).emit("sign-detected", {
-      gesture,
-      confidence: confidence || 1.0,
-      timestamp: timestamp || new Date().toISOString(),
-    });
+  socket.on("sign-detected", (payload) => {
+    const gesture = payload?.gesture;
+    if (!gesture) return;
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("sign-detected", {
+        gesture,
+        confidence: payload?.confidence || 1.0,
+        timestamp: payload?.timestamp || new Date().toISOString(),
+      });
+    }
   });
 
   // Lecture status changes (LIVE, PAUSED, COMPLETED)
-  socket.on("lecture-status-change", ({ lectureId, status }) => {
-    if (!lectureId) return;
-    io.to(lectureId).emit("lecture-status-change", { status });
+  socket.on("lecture-status-change", (payload) => {
+    const status = payload?.status;
+    if (!status) return;
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("lecture-status-change", { status, lectureId });
+    }
   });
 
   // Leave lecture room
-  socket.on("leave-lecture", ({ lectureId }) => {
-    handleLeave(socket, lectureId);
+  socket.on("leave-lecture", (payload) => {
+    const target = payload?.lectureId || (payload?.classroomId ? `class_${payload.classroomId}` : null) || socket.data?.lectureId;
+    if (target) {
+      handleLeave(socket, target);
+    }
   });
 
   // Disconnect
   socket.on("disconnect", () => {
-    if (socket.data && socket.data.lectureId) {
+    if (socket.data && socket.data.classroomId) {
+      handleLeave(socket, `class_${socket.data.classroomId}`);
+    } else if (socket.data && socket.data.lectureId) {
       handleLeave(socket, socket.data.lectureId);
     }
     console.log(`[Socket] Client disconnected: ${socket.id}`);
   });
 });
 
-function handleLeave(socket, lectureId) {
-  socket.leave(lectureId);
-  if (roomParticipants.has(lectureId)) {
-    const set = roomParticipants.get(lectureId);
+function handleLeave(socket, roomId) {
+  socket.leave(roomId);
+  if (roomParticipants.has(roomId)) {
+    const set = roomParticipants.get(roomId);
     set.delete(socket.id);
+    const count = set.size;
+    if (count === 0) {
+      roomParticipants.delete(roomId);
+    } else {
+      io.to(roomId).emit("participant-count", { count });
+    }
+  }
+}
     const count = set.size;
     if (count === 0) {
       roomParticipants.delete(lectureId);

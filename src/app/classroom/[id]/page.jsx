@@ -37,6 +37,11 @@ export default function LiveClassroomPage() {
   const [activeSign, setActiveSign] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const currentLectureRef = useRef(null);
+  useEffect(() => {
+    currentLectureRef.current = currentLecture;
+  }, [currentLecture]);
+
   // Accessibility & UX State
   const [fontSize, setFontSize] = useState("large"); // standard | large | xlarge
   const [isHighContrast, setIsHighContrast] = useState(false);
@@ -113,6 +118,7 @@ export default function LiveClassroomPage() {
           const active = lecData.lectures?.find((l) => l.status === "LIVE" || l.status === "SCHEDULED");
           if (active) {
             setCurrentLecture(active);
+            currentLectureRef.current = active;
             setLectureStatus(active.status);
 
             // Hydrate past transcripts for this lecture
@@ -151,10 +157,11 @@ export default function LiveClassroomPage() {
 
   // Socket callbacks
   const handleSocketInterimCaption = useCallback((data) => {
-    setInterimText(data.text);
+    setInterimText(data?.text || "");
   }, []);
 
   const handleSocketFinalCaption = useCallback((incomingTranscript) => {
+    if (!incomingTranscript) return;
     setTranscripts((prev) => {
       // Avoid duplicates
       if (prev.some((t) => t.id === incomingTranscript.id)) return prev;
@@ -166,12 +173,16 @@ export default function LiveClassroomPage() {
   const handleSocketSignDetected = useCallback((data) => {
     setActiveSign(data);
     setTimeout(() => {
-      setActiveSign((cur) => (cur?.timestamp === data.timestamp ? null : cur));
+      setActiveSign((cur) => (cur?.timestamp === data?.timestamp ? null : cur));
     }, 4000);
   }, []);
 
-  const handleSocketLectureStatusChange = useCallback(({ status }) => {
-    setLectureStatus(status);
+  const handleSocketLectureStatusChange = useCallback(({ status, lectureId }) => {
+    if (status) setLectureStatus(status);
+    if (lectureId) {
+      setCurrentLecture((prev) => (prev?.id === lectureId ? prev : { id: lectureId, status }));
+      currentLectureRef.current = { id: lectureId, status };
+    }
   }, []);
 
   // Initialize Socket connection
@@ -195,36 +206,65 @@ export default function LiveClassroomPage() {
   // Speech Recognition Final Transcript Handler
   const handleFinalTranscript = useCallback(
     async (finalEntry) => {
-      if (!currentLecture?.id) return;
+      if (!finalEntry?.text) return;
 
-      try {
-        // 1. Persist to SQLite/Postgres DB
-        const res = await fetch("/api/transcripts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lectureId: currentLecture.id,
-            text: finalEntry.text,
-            source: finalEntry.source || "SPEECH",
-            confidence: finalEntry.confidence || 0.95,
-          }),
-        });
+      const transcriptId = `tr-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const displayTranscript = {
+        id: transcriptId,
+        text: finalEntry.text,
+        source: finalEntry.source || "SPEECH",
+        confidence: finalEntry.confidence || 0.95,
+        timestamp: finalEntry.timestamp || new Date().toISOString(),
+        speaker: {
+          id: user?.id,
+          name: user?.name || classroom?.teacher?.name || "Instructor",
+        },
+      };
 
-        if (res.ok) {
-          const data = await res.json();
-          // 2. Broadcast via Socket.IO
-          sendFinalCaption(data.transcript);
+      // 1. Instantly display on teacher's own screen
+      setTranscripts((prev) => [...prev, displayTranscript]);
+      setInterimText("");
+
+      // 2. Instantly broadcast to all students via Socket
+      sendFinalCaption(displayTranscript);
+      sendInterimCaption("", "SPEECH");
+
+      // 3. Persist in background if active lecture is present
+      const activeLec = currentLectureRef.current || currentLecture;
+      if (activeLec?.id) {
+        try {
+          const res = await fetch("/api/transcripts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lectureId: activeLec.id,
+              text: finalEntry.text,
+              source: finalEntry.source || "SPEECH",
+              confidence: finalEntry.confidence || 0.95,
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            // Sync with DB ID
+            setTranscripts((prev) =>
+              prev.map((t) => (t.id === transcriptId ? data.transcript : t))
+            );
+          }
+        } catch (err) {
+          console.warn("Background transcript save warning:", err);
         }
-      } catch (err) {
-        console.error("Failed to persist final transcript segment:", err);
       }
     },
-    [currentLecture?.id, sendFinalCaption]
+    [user?.id, user?.name, classroom?.teacher?.name, currentLecture, sendFinalCaption, sendInterimCaption]
   );
 
   // Speech Recognition Interim Transcript Handler
   const handleInterimTranscript = useCallback(
     (interim) => {
+      // 1. Immediately show typing words on instructor screen
+      setInterimText(interim);
+      // 2. Immediately stream typing words to student screen
       sendInterimCaption(interim, "SPEECH");
     },
     [sendInterimCaption]
@@ -260,17 +300,35 @@ export default function LiveClassroomPage() {
         setActiveSign((cur) => (cur?.timestamp === stabilized.timestamp ? null : cur));
       }, 4000);
 
-      // 2. Broadcast to room via Socket.IO
+      // 2. Broadcast gesture alert to room via Socket.IO
       sendSignGesture(signLabel, stabilized.confidence);
 
-      // 3. If lecture is live, persist as transcript and broadcast caption block
-      if (currentLecture?.id) {
+      // 3. Generate caption entry and broadcast immediately
+      const transcriptId = `sign-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const signTranscript = {
+        id: transcriptId,
+        text: `[SIGN] ${signLabel}`,
+        source: "SIGN_LANGUAGE",
+        confidence: stabilized.confidence || 0.95,
+        timestamp: stabilized.timestamp || new Date().toISOString(),
+        speaker: {
+          id: user?.id,
+          name: user?.name || "Participant",
+        },
+      };
+
+      setTranscripts((prev) => [...prev, signTranscript]);
+      sendFinalCaption(signTranscript);
+
+      // 4. If lecture is live, persist in background
+      const activeLec = currentLectureRef.current || currentLecture;
+      if (activeLec?.id) {
         try {
           const res = await fetch("/api/transcripts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              lectureId: currentLecture.id,
+              lectureId: activeLec.id,
               text: `[SIGN] ${signLabel}`,
               source: "SIGN_LANGUAGE",
               confidence: stabilized.confidence || 0.95,
@@ -279,14 +337,16 @@ export default function LiveClassroomPage() {
 
           if (res.ok) {
             const data = await res.json();
-            sendFinalCaption(data.transcript);
+            setTranscripts((prev) =>
+              prev.map((t) => (t.id === transcriptId ? data.transcript : t))
+            );
           }
         } catch (err) {
           console.error("Failed to persist sign transcript:", err);
         }
       }
     },
-    [currentLecture?.id, sendSignGesture, sendFinalCaption]
+    [user?.id, user?.name, currentLecture, sendSignGesture, sendFinalCaption]
   );
 
   // Initialize Computer Vision Gesture Recognition Hook
@@ -390,6 +450,7 @@ export default function LiveClassroomPage() {
       }
 
       setCurrentLecture(data.lecture);
+      currentLectureRef.current = data.lecture;
       setLectureStatus("LIVE");
       setTranscripts([]);
       updateLectureStatus("LIVE");

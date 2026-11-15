@@ -29,6 +29,26 @@ export function useSpeechRecognition({
   const animationFrameRef = useRef(null);
   const shouldKeepListeningRef = useRef(false);
 
+  // Store latest callbacks in refs to avoid stale closures in event handlers
+  const onFinalTranscriptRef = useRef(onFinalTranscript);
+  const onInterimTranscriptRef = useRef(onInterimTranscript);
+  const languageRef = useRef(language);
+
+  useEffect(() => {
+    onFinalTranscriptRef.current = onFinalTranscript;
+  }, [onFinalTranscript]);
+
+  useEffect(() => {
+    onInterimTranscriptRef.current = onInterimTranscript;
+  }, [onInterimTranscript]);
+
+  useEffect(() => {
+    languageRef.current = language;
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = language;
+    }
+  }, [language]);
+
   // Check Web Speech API support
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -110,7 +130,7 @@ export function useSpeechRecognition({
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = language;
+    recognition.lang = languageRef.current || "en-IN";
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
@@ -135,8 +155,8 @@ export function useSpeechRecognition({
               source: "SPEECH",
             };
             setFinalTranscripts((prev) => [...prev, finalEntry]);
-            if (onFinalTranscript) {
-              onFinalTranscript(finalEntry);
+            if (onFinalTranscriptRef.current) {
+              onFinalTranscriptRef.current(finalEntry);
             }
           }
         } else {
@@ -145,13 +165,13 @@ export function useSpeechRecognition({
       }
 
       setInterimText(interim);
-      if (onInterimTranscript) {
-        onInterimTranscript(interim);
+      if (onInterimTranscriptRef.current) {
+        onInterimTranscriptRef.current(interim);
       }
     };
 
     recognition.onerror = (event) => {
-      console.error("Speech Recognition Error:", event.error);
+      console.warn("Speech Recognition Event:", event.error);
       if (event.error === "not-allowed") {
         setError("Microphone access was denied. Please allow microphone permissions in your browser settings.");
         shouldKeepListeningRef.current = false;
@@ -161,20 +181,24 @@ export function useSpeechRecognition({
       } else if (event.error === "network") {
         setError("Network connectivity issue interrupted speech recognition. Re-establishing connection...");
       } else if (event.error === "no-speech") {
-        // Normal quiet period; do not stop listening
+        // Normal silence period; do not error out, onend will auto-restart
       } else {
-        setError(`Speech recognition encountered an issue: ${event.error}`);
+        setError(`Speech recognition notice: ${event.error}`);
       }
     };
 
     recognition.onend = () => {
-      // Auto-restart if we should still be listening (e.g. Chrome 60s silence timeout)
+      // Auto-restart if we should still be listening (e.g. Chrome silence timeout)
       if (shouldKeepListeningRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          // May throw if already starting; safely ignore
-        }
+        setTimeout(() => {
+          if (shouldKeepListeningRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+            } catch (err) {
+              // Ignore if already active
+            }
+          }
+        }, 150);
       } else {
         setIsListening(false);
         isListeningRef.current = false;
@@ -184,7 +208,7 @@ export function useSpeechRecognition({
     };
 
     return recognition;
-  }, [language, onFinalTranscript, onInterimTranscript, stopAudioMeter]);
+  }, [stopAudioMeter]);
 
   const startListening = useCallback(async () => {
     if (!isSupported) {
@@ -201,14 +225,19 @@ export function useSpeechRecognition({
       }
 
       if (recognitionRef.current) {
-        recognitionRef.current.lang = language;
-        recognitionRef.current.start();
+        recognitionRef.current.lang = languageRef.current || language;
+        try {
+          recognitionRef.current.start();
+        } catch (startErr) {
+          if (!startErr.message || !startErr.message.includes("already started")) {
+            console.warn("Speech start exception:", startErr);
+          }
+        }
       }
 
       await startAudioMeter();
     } catch (err) {
       console.warn("Failed to start speech recognition:", err);
-      // Already running is not an error
       if (err.message && !err.message.includes("already started")) {
         setError(err.message || "Failed to start speech recognition");
       }

@@ -16,20 +16,55 @@ export function useClassroomSocket({
   const [connectionStatus, setConnectionStatus] = useState("CONNECTING"); // CONNECTING | CONNECTED | OFFLINE | ERROR
   const [participantCount, setParticipantCount] = useState(1);
 
+  // Store callbacks in refs to avoid reconnecting socket on parent state changes
+  const onInterimCaptionRef = useRef(onInterimCaption);
+  const onFinalCaptionRef = useRef(onFinalCaption);
+  const onSignDetectedRef = useRef(onSignDetected);
+  const onLectureStatusChangeRef = useRef(onLectureStatusChange);
+
+  useEffect(() => {
+    onInterimCaptionRef.current = onInterimCaption;
+  }, [onInterimCaption]);
+
+  useEffect(() => {
+    onFinalCaptionRef.current = onFinalCaption;
+  }, [onFinalCaption]);
+
+  useEffect(() => {
+    onSignDetectedRef.current = onSignDetected;
+  }, [onSignDetected]);
+
+  useEffect(() => {
+    onLectureStatusChangeRef.current = onLectureStatusChange;
+  }, [onLectureStatusChange]);
+
   const activeRoomId = lectureId || (classroomId ? `class_${classroomId}` : null);
 
   useEffect(() => {
-    if (!activeRoomId) return;
+    if (!activeRoomId && !classroomId) return;
 
-    const socketUrl =
-      process.env.NEXT_PUBLIC_SOCKET_URL ||
-      (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-        ? window.location.origin
-        : "http://localhost:3001");
+    // Resolve socket URL safely
+    let socketUrl = null;
+    if (typeof window !== "undefined") {
+      const isLocal =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+
+      if (!isLocal) {
+        // In cloud deployment (Render, Vercel, HTTPS), ALWAYS use the current origin
+        socketUrl = window.location.origin;
+      } else {
+        // In local development, prefer current origin if using unified server (port 3000), or env
+        socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
+      }
+    } else {
+      socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
+    }
+
     console.log(`[useClassroomSocket] Connecting to ${socketUrl} for room: ${activeRoomId}`);
 
     const socket = io(socketUrl, {
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       timeout: 10000,
       transports: ["websocket", "polling"],
@@ -43,6 +78,7 @@ export function useClassroomSocket({
 
       socket.emit("join-lecture", {
         lectureId: activeRoomId,
+        classroomId: classroomId,
         userId: user?.id,
         userName: user?.name,
         role: user?.role || "STUDENT",
@@ -54,26 +90,26 @@ export function useClassroomSocket({
     });
 
     socket.on("caption-interim", (data) => {
-      if (onInterimCaption) {
-        onInterimCaption(data);
+      if (onInterimCaptionRef.current) {
+        onInterimCaptionRef.current(data);
       }
     });
 
     socket.on("caption-final", (transcript) => {
-      if (onFinalCaption) {
-        onFinalCaption(transcript);
+      if (onFinalCaptionRef.current) {
+        onFinalCaptionRef.current(transcript);
       }
     });
 
     socket.on("sign-detected", (data) => {
-      if (onSignDetected) {
-        onSignDetected(data);
+      if (onSignDetectedRef.current) {
+        onSignDetectedRef.current(data);
       }
     });
 
     socket.on("lecture-status-change", (data) => {
-      if (onLectureStatusChange) {
-        onLectureStatusChange(data);
+      if (onLectureStatusChangeRef.current) {
+        onLectureStatusChangeRef.current(data);
       }
     });
 
@@ -89,61 +125,65 @@ export function useClassroomSocket({
 
     return () => {
       if (socket) {
-        socket.emit("leave-lecture", { lectureId: activeRoomId });
+        socket.emit("leave-lecture", { lectureId: activeRoomId, classroomId });
         socket.disconnect();
       }
     };
-  }, [activeRoomId, user?.id, user?.name, user?.role, onInterimCaption, onFinalCaption, onSignDetected, onLectureStatusChange]);
+  }, [activeRoomId, classroomId, user?.id, user?.name, user?.role]);
 
   const sendInterimCaption = useCallback(
     (text, source = "SPEECH") => {
-      if (socketRef.current && socketRef.current.connected && activeRoomId) {
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("caption-interim", {
           lectureId: activeRoomId,
+          classroomId,
           text,
           source,
         });
       }
     },
-    [activeRoomId]
+    [activeRoomId, classroomId]
   );
 
   const sendFinalCaption = useCallback(
     (transcript) => {
-      if (socketRef.current && socketRef.current.connected && activeRoomId) {
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("caption-final", {
           lectureId: activeRoomId,
+          classroomId,
           transcript,
         });
       }
     },
-    [activeRoomId]
+    [activeRoomId, classroomId]
   );
 
   const sendSignGesture = useCallback(
     (gesture, confidence = 1.0) => {
-      if (socketRef.current && socketRef.current.connected && activeRoomId) {
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("sign-detected", {
           lectureId: activeRoomId,
+          classroomId,
           gesture,
           confidence,
           timestamp: new Date().toISOString(),
         });
       }
     },
-    [activeRoomId]
+    [activeRoomId, classroomId]
   );
 
   const updateLectureStatus = useCallback(
     (status) => {
-      if (socketRef.current && socketRef.current.connected && activeRoomId) {
+      if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("lecture-status-change", {
           lectureId: activeRoomId,
+          classroomId,
           status,
         });
       }
     },
-    [activeRoomId]
+    [activeRoomId, classroomId]
   );
 
   return {
