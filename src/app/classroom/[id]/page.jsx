@@ -512,6 +512,7 @@ export default function LiveClassroomPage() {
   const {
     isListening,
     micLevel,
+    isSpeaking,
     error: speechError,
     startListening,
     stopListening,

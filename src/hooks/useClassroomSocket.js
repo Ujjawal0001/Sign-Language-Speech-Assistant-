@@ -97,7 +97,8 @@ export function useClassroomSocket({
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       timeout: 10000,
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
+      autoConnect: true,
     });
 
     socketRef.current = socket;
@@ -185,8 +186,18 @@ export function useClassroomSocket({
 
     return () => {
       if (socket) {
-        socket.emit("leave-lecture", { lectureId: activeRoomId, classroomId });
-        socket.disconnect();
+        if (socket.connected) {
+          try {
+            socket.emit("leave-lecture", { lectureId: activeRoomId, classroomId });
+          } catch (e) {
+            // ignore
+          }
+        }
+        try {
+          socket.disconnect();
+        } catch (e) {
+          // ignore
+        }
       }
     };
   }, [activeRoomId, classroomId, user?.id, user?.name, user?.role]);
