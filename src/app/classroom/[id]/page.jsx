@@ -36,6 +36,7 @@ export default function LiveClassroomPage() {
   const [interimText, setInterimText] = useState("");
   const [activeSign, setActiveSign] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [manualCaption, setManualCaption] = useState("");
 
   const currentLectureRef = useRef(null);
   useEffect(() => {
@@ -505,6 +506,45 @@ export default function LiveClassroomPage() {
     }
   };
 
+  // Teacher Action: Manually type and broadcast a verified caption block
+  const handleManualCaptionSubmit = (e) => {
+    e.preventDefault();
+    if (!manualCaption.trim()) return;
+
+    const text = manualCaption.trim();
+    setManualCaption("");
+
+    const transcriptId = `text-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const displayTranscript = {
+      id: transcriptId,
+      text,
+      source: "SPEECH",
+      confidence: 1.0,
+      timestamp: new Date().toISOString(),
+      speaker: {
+        id: user?.id,
+        name: user?.name || classroom?.teacher?.name || "Instructor",
+      },
+    };
+
+    setTranscripts((prev) => [...prev, displayTranscript]);
+    sendFinalCaption(displayTranscript);
+
+    const activeLec = currentLectureRef.current || currentLecture;
+    if (activeLec?.id) {
+      fetch("/api/transcripts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lectureId: activeLec.id,
+          text,
+          source: "SPEECH",
+          confidence: 1.0,
+        }),
+      }).catch((err) => console.warn("Failed to persist manual caption:", err));
+    }
+  };
+
   // Filter transcripts by search query if user searches
   const filteredTranscripts = searchQuery.trim()
     ? transcripts.filter((t) =>
@@ -659,15 +699,48 @@ export default function LiveClassroomPage() {
 
         {/* 2. MAIN CAPTION VIEWPORT & 3. SIDE PANEL */}
         <div className="flex-1 flex flex-col lg:flex-row gap-5 items-stretch min-h-[500px]">
-          <CaptionView
-            transcripts={filteredTranscripts}
-            interimText={interimText}
-            activeSign={activeSign}
-            isListening={isListening}
-            isHighContrast={isHighContrast}
-            fontSize={fontSize}
-            lectureStatus={lectureStatus}
-          />
+          <div className="flex-1 flex flex-col gap-3 min-h-[480px]">
+            <CaptionView
+              transcripts={filteredTranscripts}
+              interimText={interimText}
+              activeSign={activeSign}
+              isListening={isListening}
+              isHighContrast={isHighContrast}
+              fontSize={fontSize}
+              lectureStatus={lectureStatus}
+              isTeacher={isTeacher}
+              onStartSpeech={handlePauseResumeRecognition}
+            />
+
+            {/* Teacher Fast Announcement / Caption Block Creator */}
+            {isTeacher && (
+              <form
+                onSubmit={handleManualCaptionSubmit}
+                className={`flex items-center gap-2 p-2 rounded-2xl border transition-colors shadow-tactile ${
+                  isHighContrast
+                    ? "bg-[#0B0F0E] border-white/20"
+                    : "bg-white border-auralis-border"
+                }`}
+              >
+                <input
+                  type="text"
+                  value={manualCaption}
+                  onChange={(e) => setManualCaption(e.target.value)}
+                  placeholder="Type academic key phrase, formula, or announcement to broadcast into caption block..."
+                  className={`flex-1 px-3 py-2 text-xs bg-transparent outline-none ${
+                    isHighContrast ? "text-white placeholder:text-white/40" : "text-auralis-text placeholder:text-auralis-muted"
+                  }`}
+                />
+                <button
+                  type="submit"
+                  disabled={!manualCaption.trim()}
+                  className="px-4 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold transition-all disabled:opacity-40 shadow-tactile"
+                >
+                  Write to Caption Block
+                </button>
+              </form>
+            )}
+          </div>
 
           <SidePanel
             isHighContrast={isHighContrast}

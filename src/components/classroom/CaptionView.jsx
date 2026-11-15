@@ -19,6 +19,8 @@ export default function CaptionView({
   isHighContrast = false,
   fontSize = "large",
   lectureStatus = "SCHEDULED",
+  isTeacher = false,
+  onStartSpeech = null,
 }) {
   const scrollContainerRef = useRef(null);
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
@@ -164,18 +166,27 @@ export default function CaptionView({
               </p>
             </div>
 
-            {lectureStatus === "LIVE" && isListening && (
+            {isListening ? (
               <div
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-semibold ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-semibold ${
                   isHighContrast
                     ? "bg-[#FFE27A] text-black"
-                    : "bg-auralis-highlight text-auralis-accent border border-auralis-secondary/50"
+                    : "bg-emerald-50 text-emerald-800 border border-emerald-200"
                 }`}
               >
-                <span className="w-2 h-2 rounded-full bg-auralis-accent animate-ping" />
-                <span>Microphone active • Listening continuously</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Microphone active • Analyzing voice input in real time</span>
               </div>
-            )}
+            ) : isTeacher && onStartSpeech ? (
+              <button
+                type="button"
+                onClick={onStartSpeech}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-heading font-bold shadow-tactile transition-all"
+              >
+                <Mic className="w-4 h-4" />
+                <span>Activate Microphone &amp; Speech Analyzer</span>
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-6">
@@ -282,7 +293,7 @@ export default function CaptionView({
                     }`}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span>TRANSCRIBING</span>
+                    <span>ANALYZING &amp; WRITING</span>
                   </span>
                 </div>
 

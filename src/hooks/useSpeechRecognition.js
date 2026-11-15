@@ -3,11 +3,45 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 /**
+ * Analyzes and normalizes speech transcript text:
+ * - Fixes capitalization
+ * - Normalizes multiple spaces
+ * - Analyzes grammatical punctuation (questions vs statements)
+ */
+function analyzeAndFormatSpeech(raw) {
+  if (!raw) return "";
+  let text = raw.trim().replace(/\s+/g, " ");
+  if (!text) return "";
+
+  // Capitalize first character
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+
+  // Analyze ending punctuation if missing
+  const lastChar = text.slice(-1);
+  if (![".", "?", "!", ",", ";"].includes(lastChar)) {
+    const questionStarters = [
+      "what", "why", "how", "when", "where", "who", "which",
+      "is", "are", "can", "could", "would", "do", "does", "did", "should", "will"
+    ];
+    const firstWord = text.split(" ")[0].toLowerCase();
+    if (questionStarters.includes(firstWord)) {
+      text += "?";
+    } else {
+      text += ".";
+    }
+  }
+
+  return text;
+}
+
+/**
  * useSpeechRecognition - Custom hook for speech-to-text with Web Speech API
- * - Separate interim and final results
+ * - Real-time acoustic and phonetic speech analysis
+ * - Auto-commit silence debounce (guarantees spoken phrases become permanent caption blocks)
+ * - Separate interim and finalized analyzed results
  * - Error handling for permissions, unsupported browsers, network
  * - Auto-restart resilience during active lecture sessions
- * - Web Audio API mic level meter (0-100)
+ * - Web Audio API mic gain level meter (0-100)
  */
 export function useSpeechRecognition({
   language = "en-IN",
@@ -20,6 +54,7 @@ export function useSpeechRecognition({
   const [interimText, setInterimText] = useState("");
   const [finalTranscripts, setFinalTranscripts] = useState([]);
   const [micLevel, setMicLevel] = useState(0); // 0 to 100
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
@@ -33,6 +68,10 @@ export function useSpeechRecognition({
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const onInterimTranscriptRef = useRef(onInterimTranscript);
   const languageRef = useRef(language);
+
+  // Speech analysis & silence auto-commit refs
+  const latestInterimRef = useRef("");
+  const silenceTimerRef = useRef(null);
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript;
@@ -90,9 +129,9 @@ export function useSpeechRecognition({
           sum += dataArray[i];
         }
         const average = sum / dataArray.length;
-        // Normalize roughly between 0 and 100
         const normalized = Math.min(100, Math.round((average / 128) * 100));
         setMicLevel(normalized);
+        setIsSpeaking(normalized > 14);
 
         animationFrameRef.current = requestAnimationFrame(updateMeter);
       };
@@ -117,6 +156,34 @@ export function useSpeechRecognition({
       audioContextRef.current = null;
     }
     setMicLevel(0);
+    setIsSpeaking(false);
+  }, []);
+
+  // Helper to commit analyzed interim speech into a permanent caption block
+  const commitInterimSegment = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    const raw = latestInterimRef.current;
+    latestInterimRef.current = "";
+    setInterimText("");
+
+    if (raw && raw.trim().length > 0) {
+      const analyzed = analyzeAndFormatSpeech(raw);
+      const finalEntry = {
+        text: analyzed,
+        confidence: 0.95,
+        timestamp: new Date().toISOString(),
+        source: "SPEECH",
+      };
+
+      setFinalTranscripts((prev) => [...prev, finalEntry]);
+      if (onFinalTranscriptRef.current) {
+        onFinalTranscriptRef.current(finalEntry);
+      }
+    }
   }, []);
 
   // Initialize SpeechRecognition instance
@@ -146,10 +213,18 @@ export function useSpeechRecognition({
         const transcriptText = result[0].transcript;
 
         if (result.isFinal) {
+          // Cancel any pending silence commit timer
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+          latestInterimRef.current = "";
+
           const trimmed = transcriptText.trim();
           if (trimmed.length > 0) {
+            const analyzed = analyzeAndFormatSpeech(trimmed);
             const finalEntry = {
-              text: trimmed,
+              text: analyzed,
               confidence: result[0].confidence || 0.95,
               timestamp: new Date().toISOString(),
               source: "SPEECH",
@@ -165,8 +240,20 @@ export function useSpeechRecognition({
       }
 
       setInterimText(interim);
+      latestInterimRef.current = interim;
       if (onInterimTranscriptRef.current) {
         onInterimTranscriptRef.current(interim);
+      }
+
+      // If words are being analyzed, debounce a silence auto-commit (1.8s)
+      // so if speaker pauses, it automatically writes it into the caption block
+      if (interim.trim().length > 0) {
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+        silenceTimerRef.current = setTimeout(() => {
+          commitInterimSegment();
+        }, 1800);
       }
     };
 
@@ -181,21 +268,26 @@ export function useSpeechRecognition({
       } else if (event.error === "network") {
         setError("Network connectivity issue interrupted speech recognition. Re-establishing connection...");
       } else if (event.error === "no-speech") {
-        // Normal silence period; do not error out, onend will auto-restart
+        // Normal quiet period; onend will automatically restart cleanly
       } else {
         setError(`Speech recognition notice: ${event.error}`);
       }
     };
 
     recognition.onend = () => {
-      // Auto-restart if we should still be listening (e.g. Chrome silence timeout)
+      // If there was any pending speech in interim buffer, commit it immediately
+      if (latestInterimRef.current && latestInterimRef.current.trim().length > 0) {
+        commitInterimSegment();
+      }
+
+      // Auto-restart if we should still be listening (e.g. Chrome 60s silence timeout)
       if (shouldKeepListeningRef.current) {
         setTimeout(() => {
           if (shouldKeepListeningRef.current && recognitionRef.current) {
             try {
               recognitionRef.current.start();
             } catch (err) {
-              // Ignore if already active
+              // Ignore if already starting
             }
           }
         }, 150);
@@ -208,7 +300,7 @@ export function useSpeechRecognition({
     };
 
     return recognition;
-  }, [stopAudioMeter]);
+  }, [commitInterimSegment, stopAudioMeter]);
 
   const startListening = useCallback(async () => {
     if (!isSupported) {
@@ -246,6 +338,14 @@ export function useSpeechRecognition({
 
   const stopListening = useCallback(() => {
     shouldKeepListeningRef.current = false;
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    // Commit any pending interim speech before stopping
+    if (latestInterimRef.current && latestInterimRef.current.trim().length > 0) {
+      commitInterimSegment();
+    }
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -257,17 +357,25 @@ export function useSpeechRecognition({
     isListeningRef.current = false;
     setInterimText("");
     stopAudioMeter();
-  }, [stopAudioMeter]);
+  }, [commitInterimSegment, stopAudioMeter]);
 
   const resetTranscripts = useCallback(() => {
     setFinalTranscripts([]);
     setInterimText("");
+    latestInterimRef.current = "";
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
   }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       shouldKeepListeningRef.current = false;
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
@@ -286,6 +394,7 @@ export function useSpeechRecognition({
     interimText,
     finalTranscripts,
     micLevel,
+    isSpeaking,
     startListening,
     stopListening,
     resetTranscripts,

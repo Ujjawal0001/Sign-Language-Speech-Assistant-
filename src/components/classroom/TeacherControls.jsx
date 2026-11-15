@@ -45,18 +45,35 @@ export default function TeacherControls({
           {/* Left: Primary Lecture Workflow Buttons */}
           <div className="flex items-center gap-3 flex-wrap">
             {lectureStatus !== "LIVE" && lectureStatus !== "PAUSED" ? (
-              <button
-                onClick={onStartLecture}
-                disabled={isActionLoading}
-                className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm shadow-tactile hover:shadow transition-all disabled:opacity-50"
-              >
-                {isActionLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Play className="w-4 h-4 fill-white" />
-                )}
-                <span>Start Live Lecture</span>
-              </button>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  onClick={onStartLecture}
+                  disabled={isActionLoading}
+                  className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm shadow-tactile hover:shadow transition-all disabled:opacity-50"
+                >
+                  {isActionLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-white" />
+                  )}
+                  <span>Start Live Lecture</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onPauseResumeRecognition}
+                  disabled={isActionLoading}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs border transition-all ${
+                    isListening
+                      ? "bg-emerald-600 text-white shadow-tactile"
+                      : "bg-auralis-bg hover:bg-auralis-surface text-auralis-text border-auralis-border"
+                  }`}
+                  title={isListening ? "Microphone active - analyzing speech" : "Enable microphone to analyze speech"}
+                >
+                  <Mic className="w-4 h-4 text-auralis-accent" />
+                  <span>{isListening ? "Mic Analysis Active" : "Enable Microphone Analysis"}</span>
+                </button>
+              </div>
             ) : (
               <>
                 {/* Pause / Resume Speech Recognition */}
