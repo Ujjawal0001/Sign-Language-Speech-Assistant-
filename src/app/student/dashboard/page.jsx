@@ -24,6 +24,11 @@ import {
   Volume2,
   RotateCcw,
   Check,
+  ShieldCheck,
+  Lock,
+  EyeOff,
+  Edit3,
+  User,
 } from "lucide-react";
 
 export default function StudentDashboard() {
@@ -46,6 +51,76 @@ export default function StudentDashboard() {
   const [showAudioWave, setShowAudioWave] = useState(true);
   const [gestureAlert, setGestureAlert] = useState(true);
   const [saveToast, setSaveToast] = useState(false);
+
+  // Profile Edit State
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name || "");
+      setProfileEmail(user.email || "");
+    }
+  }, [user]);
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setProfileError("");
+    setProfileSuccess("");
+
+    if (newPassword && newPassword.length < 8) {
+      setProfileError("New password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword && newPassword !== confirmNewPassword) {
+      setProfileError("New passwords do not match.");
+      return;
+    }
+    if (newPassword && !currentPassword) {
+      setProfileError("Current password is required to change password.");
+      return;
+    }
+
+    setProfileLoading(true);
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileName,
+          email: profileEmail,
+          currentPassword: currentPassword || undefined,
+          newPassword: newPassword || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update profile.");
+      }
+
+      setUser(data.user);
+      setProfileSuccess("Account profile updated successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setTimeout(() => {
+        setProfileSuccess("");
+      }, 3000);
+    } catch (err) {
+      setProfileError(err.message || "An error occurred.");
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   // Load saved accessibility preferences on mount
   useEffect(() => {
@@ -264,18 +339,42 @@ export default function StudentDashboard() {
               <Sliders className="w-4 h-4 shrink-0" />
               <span>Accessibility Settings</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab("profile")}
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === "profile"
+                  ? "bg-auralis-highlight text-auralis-accent shadow-tactile font-bold"
+                  : "text-auralis-muted hover:text-auralis-text hover:bg-auralis-bg"
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span>Account &amp; Profile</span>
+            </button>
           </nav>
         </div>
 
         <div className="p-4 border-t border-auralis-border space-y-3">
-          <div className="p-3 rounded-xl bg-auralis-bg border border-auralis-border flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-auralis-secondary text-auralis-dark flex items-center justify-center font-bold text-xs uppercase">
-              {user?.name?.slice(0, 2) || "ST"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-auralis-text truncate">{user?.name}</div>
-              <div className="text-[10px] text-auralis-muted truncate">{user?.email}</div>
-            </div>
+          <div className="p-3 rounded-xl bg-auralis-bg border border-auralis-border flex items-center justify-between gap-3">
+            <button
+              onClick={() => setActiveTab("profile")}
+              className="flex items-center gap-2.5 min-w-0 text-left flex-1 hover:opacity-80 transition-opacity"
+            >
+              <div className="w-8 h-8 rounded-full bg-auralis-secondary text-auralis-dark flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                {user?.name?.slice(0, 2) || "ST"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-auralis-text truncate">{user?.name}</div>
+                <div className="text-[10px] text-auralis-muted truncate">{user?.email}</div>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab("profile")}
+              title="Edit Profile"
+              className="p-1.5 rounded-lg text-auralis-muted hover:text-auralis-accent hover:bg-white transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <button
@@ -619,7 +718,7 @@ export default function StudentDashboard() {
           )}
 
           {/* TAB 2 & 3: CLASSROOMS & JOIN */}
-          {activeTab !== "accessibility" && (
+          {activeTab !== "accessibility" && activeTab !== "profile" && (
             <>
               <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile">
                 <div className="max-w-2xl">
@@ -761,6 +860,199 @@ export default function StudentDashboard() {
                 )}
               </div>
             </>
+          )}
+
+          {/* TAB 4: ACCOUNT & PROFILE SETTINGS */}
+          {activeTab === "profile" && (
+            <div className="space-y-8 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-heading font-bold text-2xl text-auralis-text">
+                    Account &amp; Security Profile
+                  </h2>
+                  <p className="text-xs text-auralis-muted mt-1">
+                    Manage your personal student details and update your login password.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("classrooms")}
+                  className="px-4 py-2 rounded-xl bg-auralis-bg hover:bg-auralis-surface border border-auralis-border text-xs font-bold text-auralis-text transition-colors self-start sm:self-auto"
+                >
+                  Back to Classrooms
+                </button>
+              </div>
+
+              {/* OVERVIEW STATS */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-5 rounded-2xl bg-white border border-auralis-border shadow-tactile">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-auralis-muted block">
+                    Student Account
+                  </span>
+                  <div className="text-base font-bold text-auralis-text mt-1">{user?.name}</div>
+                  <span className="text-xs text-auralis-muted block mt-0.5 truncate">{user?.email}</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white border border-auralis-border shadow-tactile">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-auralis-muted block">
+                    Access Tier
+                  </span>
+                  <span className="inline-block mt-2 text-xs font-bold font-mono px-2.5 py-0.5 rounded bg-auralis-highlight text-auralis-accent border border-auralis-secondary/40">
+                    ENROLLED STUDENT
+                  </span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white border border-auralis-border shadow-tactile">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-auralis-muted block">
+                    Enrolled Courses
+                  </span>
+                  <div className="text-2xl font-extrabold text-auralis-text mt-1">{classrooms.length}</div>
+                </div>
+              </div>
+
+              {/* PROFILE EDIT FORM */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile max-w-2xl">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent mb-4">
+                  <Edit3 className="w-4 h-4" />
+                  <span>Update Account Information</span>
+                </div>
+
+                {profileError && (
+                  <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <span>{profileError}</span>
+                  </div>
+                )}
+
+                {profileSuccess && (
+                  <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{profileSuccess}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleProfileSubmit} className="space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-auralis-text mb-1.5">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      placeholder="Your full name"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text focus:outline-none focus:ring-2 focus:ring-auralis-accent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-auralis-text mb-1.5">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={profileEmail}
+                      onChange={(e) => setProfileEmail(e.target.value)}
+                      placeholder="student@university.edu"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text focus:outline-none focus:ring-2 focus:ring-auralis-accent"
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t border-auralis-border">
+                    <span className="text-xs font-bold text-auralis-text block mb-1">
+                      Change Password (Optional)
+                    </span>
+                    <p className="text-[11px] text-auralis-muted mb-4">
+                      Leave these fields blank if you do not want to change your current password.
+                    </p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-auralis-muted mb-1">
+                          Current Password
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-3.5 h-3.5 text-auralis-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            placeholder="Enter current password to authorize changes"
+                            className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text focus:outline-none focus:ring-2 focus:ring-auralis-accent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-auralis-muted hover:text-auralis-text"
+                          >
+                            {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-auralis-muted mb-1">
+                          New Password
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-3.5 h-3.5 text-auralis-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="At least 8 characters"
+                            className="w-full pl-9 pr-10 py-2 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text focus:outline-none focus:ring-2 focus:ring-auralis-accent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-auralis-muted hover:text-auralis-text"
+                          >
+                            {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-auralis-muted mb-1">
+                          Confirm New Password
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-3.5 h-3.5 text-auralis-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="password"
+                            value={confirmNewPassword}
+                            onChange={(e) => setConfirmNewPassword(e.target.value)}
+                            placeholder="Re-enter new password"
+                            className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text focus:outline-none focus:ring-2 focus:ring-auralis-accent"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-auralis-border flex items-center justify-end gap-3">
+                    <button
+                      type="submit"
+                      disabled={profileLoading}
+                      className="px-6 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile flex items-center gap-2 cursor-pointer"
+                    >
+                      {profileLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Saving Changes...</span>
+                        </>
+                      ) : (
+                        <span>Save Profile Changes</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </div>
       </main>

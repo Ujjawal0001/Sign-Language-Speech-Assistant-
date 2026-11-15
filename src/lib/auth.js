@@ -27,6 +27,20 @@ export function verifyToken(token) {
   }
 }
 
+export function signResetToken(payload) {
+  return jwt.sign({ ...payload, purpose: "reset_password" }, JWT_SECRET, { expiresIn: "1h" });
+}
+
+export function verifyResetToken(token) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded || decoded.purpose !== "reset_password") return null;
+    return decoded;
+  } catch (error) {
+    return null;
+  }
+}
+
 export function setAuthCookie(token) {
   const cookieStore = cookies();
   cookieStore.set(COOKIE_NAME, token, {
