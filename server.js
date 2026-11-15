@@ -126,11 +126,14 @@ app.prepare().then(() => {
     }
   }
 
-  server.listen(port, () => {
+  server.listen(port, hostname, () => {
     console.log(`====================================================`);
     console.log(`  AURALIS PRODUCTION SERVER RUNNING`);
     console.log(`  URL: http://${hostname}:${port}`);
     console.log(`  Next.js + Socket.IO Unified on Port ${port}`);
     console.log(`====================================================`);
   });
+}).catch((err) => {
+  console.error("[Fatal Server Error] Next.js prepare failed:", err);
+  process.exit(1);
 });
