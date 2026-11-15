@@ -298,28 +298,6 @@ export default function TeacherDashboard() {
 
       <main className="flex-1 p-6 sm:p-10 lg:p-12 overflow-y-auto">
         <div className="max-w-6xl mx-auto space-y-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-auralis-border">
-            <div>
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-auralis-accent bg-auralis-highlight px-3 py-1 rounded-full border border-auralis-secondary/60">
-                Instructor Workspace
-              </span>
-              <h1 className="font-heading font-extrabold text-3xl sm:text-4xl text-auralis-text tracking-tight mt-3">
-                {getGreeting()}, {user?.name}
-              </h1>
-              <p className="text-sm text-auralis-muted mt-1">
-                Your classroom is ready for more inclusive learning.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-2.5 px-5 py-3.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm transition-all shadow-tactile hover:shadow shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-auralis-accent"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Classroom</span>
-            </button>
-          </div>
-
           {/* ========================================================= */}
           {/* TAB 1: OVERVIEW */}
           {/* ========================================================= */}
