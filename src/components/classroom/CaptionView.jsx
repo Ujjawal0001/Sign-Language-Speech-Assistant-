@@ -30,6 +30,8 @@ export default function CaptionView({
         return "text-lg sm:text-xl leading-relaxed";
       case "xlarge":
         return "text-2xl sm:text-3xl lg:text-4xl leading-loose font-medium";
+      case "huge":
+        return "text-3xl sm:text-4xl lg:text-5xl leading-loose font-bold";
       case "large":
       default:
         return "text-xl sm:text-2xl leading-relaxed";
@@ -42,6 +44,8 @@ export default function CaptionView({
         return "text-lg sm:text-xl leading-relaxed";
       case "xlarge":
         return "text-2xl sm:text-3xl leading-loose";
+      case "huge":
+        return "text-3xl sm:text-4xl leading-loose";
       case "large":
       default:
         return "text-xl sm:text-2xl leading-relaxed";

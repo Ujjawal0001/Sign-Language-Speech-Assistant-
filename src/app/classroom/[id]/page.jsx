@@ -48,6 +48,27 @@ export default function LiveClassroomPage() {
   const canvasRef = useRef(null);
   const cameraStreamRef = useRef(null);
 
+  // Hydrate accessibility preferences from Student Dashboard
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("auralis_student_accessibility");
+      if (saved) {
+        const pref = JSON.parse(saved);
+        if (pref.fontSize) setFontSize(pref.fontSize);
+        if (typeof pref.isHighContrast === "boolean") {
+          setIsHighContrast(pref.isHighContrast);
+          if (pref.isHighContrast) {
+            document.documentElement.classList.add("high-contrast");
+          } else {
+            document.documentElement.classList.remove("high-contrast");
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   // 1. Initial User & Classroom Authentication & Data Loading
   useEffect(() => {
     async function loadClassroomAndSession() {

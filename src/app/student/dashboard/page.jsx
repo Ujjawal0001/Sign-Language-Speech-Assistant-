@@ -16,6 +16,14 @@ import {
   CheckCircle2,
   Sun,
   Moon,
+  Type,
+  Sparkles,
+  Contrast,
+  Eye,
+  Hand,
+  Volume2,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 
 export default function StudentDashboard() {
@@ -33,10 +41,75 @@ export default function StudentDashboard() {
 
   // Accessibility Controls (Live State)
   const [isHighContrast, setIsHighContrast] = useState(false);
+  const [fontSize, setFontSize] = useState("large"); // standard | large | xlarge | huge
+  const [skeletonMode, setSkeletonMode] = useState("full"); // full | minimal | hidden
+  const [showAudioWave, setShowAudioWave] = useState(true);
+  const [gestureAlert, setGestureAlert] = useState(true);
+  const [saveToast, setSaveToast] = useState(false);
 
+  // Load saved accessibility preferences on mount
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("auralis_student_accessibility");
+      if (saved) {
+        const pref = JSON.parse(saved);
+        if (pref.fontSize) setFontSize(pref.fontSize);
+        if (typeof pref.isHighContrast === "boolean") {
+          setIsHighContrast(pref.isHighContrast);
+          if (pref.isHighContrast) {
+            document.documentElement.classList.add("high-contrast");
+          } else {
+            document.documentElement.classList.remove("high-contrast");
+          }
+        }
+        if (pref.skeletonMode) setSkeletonMode(pref.skeletonMode);
+        if (typeof pref.showAudioWave === "boolean") setShowAudioWave(pref.showAudioWave);
+        if (typeof pref.gestureAlert === "boolean") setGestureAlert(pref.gestureAlert);
+      }
+    } catch (e) {
+      // ignore
+    }
     fetchSessionAndEnrolled();
   }, []);
+
+  const saveAccessibilityPreferences = (updates = {}) => {
+    const updated = {
+      fontSize,
+      isHighContrast,
+      skeletonMode,
+      showAudioWave,
+      gestureAlert,
+      ...updates,
+    };
+    try {
+      localStorage.setItem("auralis_student_accessibility", JSON.stringify(updated));
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2500);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleFontSizeChange = (size) => {
+    setFontSize(size);
+    saveAccessibilityPreferences({ fontSize: size });
+  };
+
+  const handleSkeletonModeChange = (mode) => {
+    setSkeletonMode(mode);
+    saveAccessibilityPreferences({ skeletonMode: mode });
+  };
+
+  const toggleContrast = () => {
+    const next = !isHighContrast;
+    setIsHighContrast(next);
+    if (next) {
+      document.documentElement.classList.add("high-contrast");
+    } else {
+      document.documentElement.classList.remove("high-contrast");
+    }
+    saveAccessibilityPreferences({ isHighContrast: next });
+  };
 
   const fetchSessionAndEnrolled = async () => {
     try {
@@ -102,16 +175,6 @@ export default function StudentDashboard() {
       setJoinError("Network error while joining classroom.");
     } finally {
       setIsJoining(false);
-    }
-  };
-
-  const toggleContrast = () => {
-    const next = !isHighContrast;
-    setIsHighContrast(next);
-    if (next) {
-      document.documentElement.classList.add("high-contrast");
-    } else {
-      document.documentElement.classList.remove("high-contrast");
     }
   };
 
@@ -258,145 +321,447 @@ export default function StudentDashboard() {
             </button>
           </div>
 
-          <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile">
-            <div className="max-w-2xl">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent mb-1.5">
-                <PlusCircle className="w-4 h-4" />
-                <span>Join New Classroom</span>
+          {/* TAB 1: ACCESSIBILITY PREFERENCES HUB */}
+          {activeTab === "accessibility" && (
+            <div className="space-y-8">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-heading font-bold text-2xl text-auralis-text">
+                    Accessibility & Caption Preferences
+                  </h2>
+                  <p className="text-xs text-auralis-muted mt-1 max-w-xl">
+                    Tailor live caption sizing, contrast ratios, and sign language landmark overlays. Settings are saved on this device and automatically apply whenever you enter any live classroom.
+                  </p>
+                </div>
+
+                {saveToast && (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold animate-pulse shadow-tactile shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-auralis-success" />
+                    <span>Preferences Saved &amp; Synced</span>
+                  </div>
+                )}
               </div>
-              <h2 className="font-heading font-bold text-xl text-auralis-text mb-2">
-                Enter your instructor&apos;s 6-character classroom code
-              </h2>
-              <p className="text-xs text-auralis-muted leading-relaxed mb-6">
-                Your instructor displays this code on the lecture projection or syllabus (e.g. <code className="font-mono font-bold text-auralis-accent bg-auralis-bg px-1.5 py-0.5 rounded">AURA-842</code>).
-              </p>
 
-              {joinError && (
-                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 mb-4">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                  <span>{joinError}</span>
+              {/* LIVE INTERACTIVE CAPTION SANDBOX PREVIEW */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-auralis-border/80">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                    <Sparkles className="w-4 h-4" />
+                    <span>Live Interactive Caption Preview</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-auralis-muted bg-auralis-bg px-2 py-0.5 rounded border border-auralis-border">
+                    Font: {fontSize.toUpperCase()} • Mode: {isHighContrast ? "HIGH-CONTRAST" : "STANDARD"}
+                  </span>
                 </div>
-              )}
 
-              {joinSuccess && (
-                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 mb-4">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-auralis-success" />
-                  <span>{joinSuccess}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleJoinClassroom} className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. AURA-842"
-                  maxLength={12}
-                  className="flex-1 px-4 py-3 rounded-xl bg-white border border-auralis-border font-mono text-base font-bold text-auralis-text tracking-wider placeholder:text-auralis-muted focus:outline-none focus:ring-2 focus:ring-auralis-accent focus:border-auralis-accent focus:bg-white uppercase transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={isJoining}
-                  className="px-6 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm shadow-tactile flex items-center justify-center gap-2 disabled:opacity-60"
+                {/* Simulated Caption Screen */}
+                <div
+                  className={`p-6 sm:p-8 rounded-xl border transition-all ${
+                    isHighContrast
+                      ? "bg-[#060B0A] border-[#2FE4BD]/40 text-white"
+                      : "bg-[#142B29] border-[#176B60]/30 text-white"
+                  }`}
                 >
-                  {isJoining ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      <span>Verifying...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Join Classroom</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-          </div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-300">
+                      LIVE • Instructor Spoken Stream
+                    </span>
+                  </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="font-heading font-bold text-xl text-auralis-text">
-                  Your Enrolled Classrooms
-                </h2>
-                <p className="text-xs text-auralis-muted">
-                  Click on any classroom to view real-time captions or study past lecture transcripts.
-                </p>
-              </div>
-              <span className="text-xs font-mono font-semibold bg-white border border-auralis-border px-2.5 py-1 rounded-md text-auralis-muted">
-                {classrooms.length} Enrolled
-              </span>
-            </div>
+                  <p
+                    className={`font-sans tracking-wide leading-relaxed transition-all ${
+                      fontSize === "standard"
+                        ? "text-lg"
+                        : fontSize === "xlarge"
+                        ? "text-3xl font-medium"
+                        : fontSize === "huge"
+                        ? "text-4xl font-bold"
+                        : "text-2xl"
+                    } ${isHighContrast ? "text-[#2FE4BD]" : "text-white"}`}
+                  >
+                    &ldquo;Today we are exploring binary search trees and algorithm time complexity...&rdquo;
+                  </p>
 
-            {classrooms.length === 0 ? (
-              <div className="p-10 text-center rounded-2xl bg-white border border-dashed border-auralis-border space-y-3">
-                <BookOpen className="w-10 h-10 text-auralis-muted mx-auto" />
-                <h3 className="font-heading font-bold text-base text-auralis-text">
-                  No classrooms joined yet
-                </h3>
-                <p className="text-xs text-auralis-muted max-w-sm mx-auto">
-                  Ask your teacher for their classroom code and enter it above to start participating.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {classrooms.map((cls) => {
-                  const isLive = cls.lectures && cls.lectures.length > 0 && cls.lectures[0].status === "LIVE";
-                  return (
-                    <div
-                      key={cls.id}
-                      className="p-6 rounded-2xl bg-white border border-auralis-border hover:border-auralis-accent/60 transition-all shadow-tactile flex flex-col justify-between space-y-5"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-mono font-semibold text-auralis-accent bg-auralis-highlight px-2 py-0.5 rounded">
-                            {cls.subject}
-                          </span>
-                          {isLive ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold animate-pulse">
-                              <span className="w-2 h-2 rounded-full bg-auralis-success" />
-                              <span>LIVE NOW</span>
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-mono text-auralis-muted">
-                              Code: {cls.code}
-                            </span>
-                          )}
-                        </div>
+                  {/* Simulated Interim Caption Stream */}
+                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-3">
+                    <span className="text-xs font-mono text-white/50 shrink-0">Interim:</span>
+                    <span className="text-sm font-sans italic text-white/80 animate-pulse">
+                      analyzing logarithmic efficiency O(log n)...
+                    </span>
+                  </div>
 
-                        <h3 className="font-heading font-bold text-lg text-auralis-text">
-                          {cls.name}
-                        </h3>
-                        {cls.description && (
-                          <p className="text-xs text-auralis-muted mt-1 line-clamp-2">
-                            {cls.description}
-                          </p>
-                        )}
-
-                        <div className="mt-4 pt-3 border-t border-auralis-border/60 text-xs text-auralis-muted">
-                          Instructor: <span className="font-semibold text-auralis-text">{cls.teacher?.name || "Faculty"}</span>
-                        </div>
-                      </div>
-
-                      <Link
-                        href={`/classroom/${cls.id}?role=student`}
-                        className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-tactile ${
-                          isLive
-                            ? "bg-auralis-accent text-white hover:bg-auralis-accent-hover"
-                            : "bg-auralis-bg hover:bg-auralis-surface border border-auralis-border text-auralis-text"
-                        }`}
-                      >
-                        <Radio className="w-4 h-4" />
-                        <span>{isLive ? "Join Live Caption Stream" : "Open Classroom Workspace"}</span>
-                      </Link>
+                  {/* Simulated Gesture Notification Badge */}
+                  {gestureAlert && (
+                    <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-mono font-bold shadow-tactile">
+                      <Hand className="w-3.5 h-3.5" />
+                      <span>ISL Gesture Recognized: &ldquo;QUESTION / DOUBT&rdquo; (98.4%)</span>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* SETTINGS CARD 1: CAPTION FONT SIZE */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Type className="w-4 h-4" />
+                  <span>Caption Typography Size</span>
+                </div>
+                <p className="text-xs text-auralis-muted">
+                  Choose the caption text scale that provides optimal reading speed and comfort.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+                  {[
+                    { id: "standard", label: "Standard", px: "18px", desc: "Compact desktop reading" },
+                    { id: "large", label: "Large (Recommended)", px: "24px", desc: "Best for classroom lectures" },
+                    { id: "xlarge", label: "Extra Large", px: "32px", desc: "High readability across room" },
+                    { id: "huge", label: "Maximum", px: "40px", desc: "Low vision & large displays" },
+                  ].map((size) => (
+                    <button
+                      key={size.id}
+                      type="button"
+                      onClick={() => handleFontSizeChange(size.id)}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        fontSize === size.id
+                          ? "border-auralis-accent bg-auralis-highlight/60 ring-2 ring-auralis-accent shadow-tactile"
+                          : "border-auralis-border bg-white hover:bg-auralis-bg hover:border-auralis-border/80"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-heading font-bold text-sm text-auralis-text">{size.label}</span>
+                        {fontSize === size.id && <Check className="w-4 h-4 text-auralis-accent" />}
+                      </div>
+                      <span className="text-[11px] font-mono text-auralis-accent font-semibold block">{size.px}</span>
+                      <p className="text-[11px] text-auralis-muted mt-1 leading-normal">{size.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SETTINGS CARD 2: HIGH CONTRAST & VISUAL THEME */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Contrast className="w-4 h-4" />
+                  <span>Visual Theme &amp; OLED High Contrast</span>
+                </div>
+                <p className="text-xs text-auralis-muted">
+                  Meets WCAG 2.2 AAA accessibility standard (7:1+ contrast ratio) for students with photophobia, astigmatism, or low vision.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isHighContrast) toggleContrast();
+                    }}
+                    className={`p-5 rounded-xl border text-left transition-all flex items-start gap-4 ${
+                      !isHighContrast
+                        ? "border-auralis-accent bg-auralis-highlight/60 ring-2 ring-auralis-accent shadow-tactile"
+                        : "border-auralis-border bg-white hover:bg-auralis-bg"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-auralis-bg border border-auralis-border flex items-center justify-center shrink-0">
+                      <Sun className="w-5 h-5 text-auralis-accent" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-heading font-bold text-sm text-auralis-text">Standard Theme</span>
+                        {!isHighContrast && <Check className="w-4 h-4 text-auralis-accent" />}
+                      </div>
+                      <p className="text-xs text-auralis-muted mt-1">
+                        Soft organic paper surface (#F6F7F4) with deep evergreen accents.
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isHighContrast) toggleContrast();
+                    }}
+                    className={`p-5 rounded-xl border text-left transition-all flex items-start gap-4 ${
+                      isHighContrast
+                        ? "border-[#2FE4BD] bg-[#0A100F] text-white ring-2 ring-[#2FE4BD] shadow-tactile"
+                        : "border-auralis-border bg-white hover:bg-auralis-bg"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-black border border-white/20 flex items-center justify-center shrink-0">
+                      <Moon className="w-5 h-5 text-[#2FE4BD]" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className={`font-heading font-bold text-sm ${isHighContrast ? "text-white" : "text-auralis-text"}`}>
+                          High-Contrast OLED
+                        </span>
+                        {isHighContrast && <Check className="w-4 h-4 text-[#2FE4BD]" />}
+                      </div>
+                      <p className={`text-xs mt-1 ${isHighContrast ? "text-white/70" : "text-auralis-muted"}`}>
+                        Deep black (#0A100F) with luminous cyan-teal text for maximum glare reduction.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* SETTINGS CARD 3: ISL GESTURE SKELETON & TELEMETRY */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Hand className="w-4 h-4" />
+                  <span>Indian Sign Language (ISL) Landmark Vision</span>
+                </div>
+                <p className="text-xs text-auralis-muted">
+                  Customize the real-time MediaPipe 21-joint skeleton points drawn over your webcam stream during sign language participation.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  {[
+                    { id: "full", label: "Full Skeleton", desc: "Draws all 21 joint points and anatomical bones" },
+                    { id: "minimal", label: "Minimalist Nodes", desc: "Draws fingertip landmark nodes only" },
+                    { id: "hidden", label: "Hidden Skeleton", desc: "Recognizes gestures without drawing skeleton" },
+                  ].map((skel) => (
+                    <button
+                      key={skel.id}
+                      type="button"
+                      onClick={() => handleSkeletonModeChange(skel.id)}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        skeletonMode === skel.id
+                          ? "border-auralis-accent bg-auralis-highlight/60 ring-2 ring-auralis-accent shadow-tactile"
+                          : "border-auralis-border bg-white hover:bg-auralis-bg"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-heading font-bold text-sm text-auralis-text">{skel.label}</span>
+                        {skeletonMode === skel.id && <Check className="w-4 h-4 text-auralis-accent" />}
+                      </div>
+                      <p className="text-[11px] text-auralis-muted leading-normal">{skel.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-4 border-t border-auralis-border/80 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={gestureAlert}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setGestureAlert(val);
+                        saveAccessibilityPreferences({ gestureAlert: val });
+                      }}
+                      className="w-4 h-4 text-auralis-accent rounded border-auralis-border focus:ring-auralis-accent"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-auralis-text">Visual Gesture Confirmation Pulse</span>
+                      <p className="text-[11px] text-auralis-muted">
+                        Flashes an instant green badge whenever an Indian Sign Language gesture is identified.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showAudioWave}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setShowAudioWave(val);
+                        saveAccessibilityPreferences({ showAudioWave: val });
+                      }}
+                      className="w-4 h-4 text-auralis-accent rounded border-auralis-border focus:ring-auralis-accent"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-auralis-text">Visual Speech Amplitude Wave</span>
+                      <p className="text-[11px] text-auralis-muted">
+                        Shows live audio frequency bars so you can see speech volume levels even before words appear.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* ACTION FOOTER: RESET & RETURN */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-auralis-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaults = {
+                      fontSize: "large",
+                      isHighContrast: false,
+                      skeletonMode: "full",
+                      showAudioWave: true,
+                      gestureAlert: true,
+                    };
+                    setFontSize("large");
+                    setIsHighContrast(false);
+                    document.documentElement.classList.remove("high-contrast");
+                    setSkeletonMode("full");
+                    setShowAudioWave(true);
+                    setGestureAlert(true);
+                    saveAccessibilityPreferences(defaults);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-auralis-border text-xs font-bold text-auralis-muted hover:text-auralis-text hover:bg-auralis-bg transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset All to Defaults</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("classrooms")}
+                  className="px-6 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all"
+                >
+                  Return to Classrooms
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2 & 3: CLASSROOMS & JOIN */}
+          {activeTab !== "accessibility" && (
+            <>
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent mb-1.5">
+                    <PlusCircle className="w-4 h-4" />
+                    <span>Join New Classroom</span>
+                  </div>
+                  <h2 className="font-heading font-bold text-xl text-auralis-text mb-2">
+                    Enter your instructor&apos;s 6-character classroom code
+                  </h2>
+                  <p className="text-xs text-auralis-muted leading-relaxed mb-6">
+                    Your instructor displays this code on the lecture projection or syllabus (e.g. <code className="font-mono font-bold text-auralis-accent bg-auralis-bg px-1.5 py-0.5 rounded">AURA-842</code>).
+                  </p>
+
+                  {joinError && (
+                    <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2 mb-4">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                      <span>{joinError}</span>
+                    </div>
+                  )}
+
+                  {joinSuccess && (
+                    <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 mb-4">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-auralis-success" />
+                      <span>{joinSuccess}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleJoinClassroom} className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. AURA-842"
+                      maxLength={12}
+                      className="flex-1 px-4 py-3 rounded-xl bg-white border border-auralis-border font-mono text-base font-bold text-auralis-text tracking-wider placeholder:text-auralis-muted focus:outline-none focus:ring-2 focus:ring-auralis-accent focus:border-auralis-accent focus:bg-white uppercase transition-colors"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isJoining}
+                      className="px-6 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm shadow-tactile flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {isJoining ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Join Classroom</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="font-heading font-bold text-xl text-auralis-text">
+                      Your Enrolled Classrooms
+                    </h2>
+                    <p className="text-xs text-auralis-muted">
+                      Click on any classroom to view real-time captions or study past lecture transcripts.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-semibold bg-white border border-auralis-border px-2.5 py-1 rounded-md text-auralis-muted">
+                    {classrooms.length} Enrolled
+                  </span>
+                </div>
+
+                {classrooms.length === 0 ? (
+                  <div className="p-10 text-center rounded-2xl bg-white border border-dashed border-auralis-border space-y-3">
+                    <BookOpen className="w-10 h-10 text-auralis-muted mx-auto" />
+                    <h3 className="font-heading font-bold text-base text-auralis-text">
+                      No classrooms joined yet
+                    </h3>
+                    <p className="text-xs text-auralis-muted max-w-sm mx-auto">
+                      Ask your teacher for their classroom code and enter it above to start participating.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {classrooms.map((cls) => {
+                      const isLive = cls.lectures && cls.lectures.length > 0 && cls.lectures[0].status === "LIVE";
+                      return (
+                        <div
+                          key={cls.id}
+                          className="p-6 rounded-2xl bg-white border border-auralis-border hover:border-auralis-accent/60 transition-all shadow-tactile flex flex-col justify-between space-y-5"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-xs font-mono font-semibold text-auralis-accent bg-auralis-highlight px-2 py-0.5 rounded">
+                                {cls.subject}
+                              </span>
+                              {isLive ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold animate-pulse">
+                                  <span className="w-2 h-2 rounded-full bg-auralis-success" />
+                                  <span>LIVE NOW</span>
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-mono text-auralis-muted">
+                                  Code: {cls.code}
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="font-heading font-bold text-lg text-auralis-text">
+                              {cls.name}
+                            </h3>
+                            {cls.description && (
+                              <p className="text-xs text-auralis-muted mt-1 line-clamp-2">
+                                {cls.description}
+                              </p>
+                            )}
+
+                            <div className="mt-4 pt-3 border-t border-auralis-border/60 text-xs text-auralis-muted">
+                              Instructor: <span className="font-semibold text-auralis-text">{cls.teacher?.name || "Faculty"}</span>
+                            </div>
+                          </div>
+
+                          <Link
+                            href={`/classroom/${cls.id}?role=student`}
+                            className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-tactile ${
+                              isLive
+                                ? "bg-auralis-accent text-white hover:bg-auralis-accent-hover"
+                                : "bg-auralis-bg hover:bg-auralis-surface border border-auralis-border text-auralis-text"
+                            }`}
+                          >
+                            <Radio className="w-4 h-4" />
+                            <span>{isLive ? "Join Live Caption Stream" : "Open Classroom Workspace"}</span>
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>
