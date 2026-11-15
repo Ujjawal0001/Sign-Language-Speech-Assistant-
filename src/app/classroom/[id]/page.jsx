@@ -734,11 +734,32 @@ export default function LiveClassroomPage() {
         await fetch(`/api/lectures/${activeLec.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "COMPLETED" }),
+          body: JSON.stringify({
+            status: "COMPLETED",
+            transcripts: transcripts,
+          }),
         });
+      } else if (classroom?.id) {
+        const res = await fetch("/api/lectures", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            classroomId: classroom.id,
+            title: `${classroom.name} Lecture`,
+            status: "COMPLETED",
+            transcripts: transcripts,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.lecture) {
+            setCurrentLecture(data.lecture);
+            currentLectureRef.current = data.lecture;
+          }
+        }
       }
     } catch (err) {
-      console.warn("Failed to patch lecture status:", err);
+      console.warn("Failed to conclude lecture:", err);
     } finally {
       setIsActionLoading(false);
       setLectureStatus("COMPLETED");
@@ -1169,7 +1190,7 @@ export default function LiveClassroomPage() {
                 <button
                   type="button"
                   onClick={handleDownloadTranscript}
-                  className="w-full py-2.5 px-4 rounded-xl border border-auralis-border text-xs font-bold text-auralis-text hover:bg-auralis-bg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-3 rounded-xl border border-auralis-border text-xs font-bold text-auralis-text hover:bg-auralis-bg transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Download className="w-4 h-4 text-auralis-accent" />
                   <span>Download Transcript</span>
@@ -1177,11 +1198,19 @@ export default function LiveClassroomPage() {
 
                 <button
                   type="button"
-                  onClick={() => router.push("/student/dashboard")}
-                  className="w-full py-2.5 px-4 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => router.push("/lectures")}
+                  className="w-full py-2.5 px-3 rounded-xl bg-auralis-dark hover:bg-black text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <span>Close &amp; Return Now</span>
+                  <span>View Lecture History</span>
                   <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/student/dashboard")}
+                  className="w-full py-2.5 px-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Dashboard</span>
                 </button>
               </div>
             </div>

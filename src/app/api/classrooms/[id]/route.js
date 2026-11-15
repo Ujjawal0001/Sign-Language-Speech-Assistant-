@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req, { params }) {
   try {
     const user = await getSessionUser(req);
@@ -51,16 +53,39 @@ export async function GET(req, { params }) {
 
     // Verify user is either teacher of the classroom or an enrolled student
     const isTeacher = classroom.teacherId === user.id;
-    const isEnrolled = classroom.members.some((m) => m.userId === user.id);
+    let isEnrolled = classroom.members.some((m) => m.userId === user.id);
 
-    if (!isTeacher && !isEnrolled && user.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Forbidden: You are not a member of this classroom" },
-        { status: 403 }
-      );
+    if (!isTeacher && !isEnrolled) {
+      if (user.role === "ADMIN" || user.role === "STUDENT" || !user.role) {
+        // Auto-enroll authenticated student/attendee into this classroom
+        try {
+          await prisma.classroomMember.create({
+            data: {
+              userId: user.id,
+              classroomId: classroom.id,
+            },
+          });
+          isEnrolled = true;
+        } catch (e) {
+          // Ignore unique constraint race condition
+        }
+      } else {
+        return NextResponse.json(
+          { error: "Forbidden: You are not a member of this classroom" },
+          { status: 403 }
+        );
+      }
     }
 
-    return NextResponse.json({ classroom }, { status: 200 });
+    return NextResponse.json(
+      { classroom },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET Classroom by ID Error:", error);
     return NextResponse.json(

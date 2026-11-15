@@ -32,7 +32,7 @@ export default function LectureHistoryPage() {
       try {
         setIsLoading(true);
 
-        const meRes = await fetch("/api/auth/me");
+        const meRes = await fetch("/api/auth/me", { cache: "no-store" });
         if (!meRes.ok) {
           router.push("/login?redirect=/lectures");
           return;
@@ -40,7 +40,10 @@ export default function LectureHistoryPage() {
         const meData = await meRes.json();
         setUser(meData.user);
 
-        const lecRes = await fetch("/api/lectures");
+        const lecRes = await fetch(`/api/lectures?_t=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
         if (lecRes.ok) {
           const lecData = await lecRes.json();
           setLectures(lecData.lectures || []);

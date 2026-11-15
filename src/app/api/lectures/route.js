@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // POST /api/lectures - Start / Create a new live lecture
 export async function POST(req) {
   try {
@@ -19,7 +21,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { classroomId, title } = body;
+    const { classroomId, title, status = "LIVE", transcripts = [] } = body;
 
     if (!classroomId) {
       return NextResponse.json({ error: "classroomId is required" }, { status: 400 });
@@ -41,19 +43,27 @@ export async function POST(req) {
     }
 
     // Set any currently active lectures in this classroom to COMPLETED first
-    await prisma.lecture.updateMany({
-      where: { classroomId, status: "LIVE" },
-      data: { status: "COMPLETED", endedAt: new Date() },
-    });
+    if (status === "LIVE") {
+      await prisma.lecture.updateMany({
+        where: { classroomId, status: "LIVE" },
+        data: { status: "COMPLETED", endedAt: new Date() },
+      });
+    }
 
-    const lectureTitle = title?.trim() || `${classroom.subject} Lecture – ${new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`;
+    const lectureTitle =
+      title?.trim() ||
+      `${classroom.subject} Lecture – ${new Date().toLocaleDateString("en-IN", {
+        month: "short",
+        day: "numeric",
+      })}`;
 
     const newLecture = await prisma.lecture.create({
       data: {
         title: lectureTitle,
         classroomId,
-        status: "LIVE",
+        status: status === "COMPLETED" ? "COMPLETED" : "LIVE",
         startedAt: new Date(),
+        endedAt: status === "COMPLETED" ? new Date() : null,
       },
       include: {
         classroom: {
@@ -62,9 +72,29 @@ export async function POST(req) {
       },
     });
 
+    // If transcripts were attached, bulk save them
+    if (Array.isArray(transcripts) && transcripts.length > 0) {
+      const formatted = transcripts
+        .filter((t) => t?.text)
+        .map((t) => ({
+          lectureId: newLecture.id,
+          userId: t.speaker?.id || user.id,
+          text: t.text,
+          source: t.source || "SPEECH",
+          confidence: t.confidence || 0.95,
+          timestamp: t.timestamp ? new Date(t.timestamp) : new Date(),
+        }));
+
+      if (formatted.length > 0) {
+        await prisma.transcript.createMany({
+          data: formatted,
+        });
+      }
+    }
+
     return NextResponse.json(
       {
-        message: "Lecture started successfully",
+        message: "Lecture processed successfully",
         lecture: newLecture,
       },
       { status: 201 }
@@ -93,17 +123,16 @@ export async function GET(req) {
     if (classroomId) {
       whereClause.classroomId = classroomId;
     } else {
-      // Return history based on user role
-      if (user.role === "TEACHER") {
-        whereClause.classroom = { teacherId: user.id };
-      } else if (user.role === "STUDENT") {
-        whereClause.classroom = {
-          members: {
-            some: { userId: user.id },
-          },
-        };
+      const userRole = (user.role || "").toUpperCase();
+      if (userRole === "ADMIN") {
+        // ADMIN sees all lectures across the institution
+      } else {
+        // Show lectures from all classrooms the user owns or is enrolled in
+        whereClause.OR = [
+          { classroom: { teacherId: user.id } },
+          { classroom: { members: { some: { userId: user.id } } } },
+        ];
       }
-      // ADMIN sees all lectures without filter
     }
 
     const lectures = await prisma.lecture.findMany({
@@ -127,7 +156,15 @@ export async function GET(req) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ lectures }, { status: 200 });
+    return NextResponse.json(
+      { lectures },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET Lectures Error:", error);
     return NextResponse.json({ error: "Failed to fetch lectures" }, { status: 500 });

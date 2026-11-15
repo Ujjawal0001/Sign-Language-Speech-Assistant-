@@ -4,6 +4,8 @@ import { getSessionUser } from "@/lib/auth";
 import { createClassroomSchema } from "@/lib/validations/classroom";
 import { generateUniqueClassroomCode } from "@/lib/classroom-code";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/classrooms - Fetch user's classrooms (Taught or Enrolled)
 export async function GET(req) {
   try {
@@ -32,7 +34,15 @@ export async function GET(req) {
         orderBy: { createdAt: "desc" },
       });
 
-      return NextResponse.json({ classrooms }, { status: 200 });
+      return NextResponse.json(
+        { classrooms },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          },
+        }
+      );
     } else {
       // Student - Fetch classrooms joined
       const memberships = await prisma.classroomMember.findMany({
@@ -47,9 +57,9 @@ export async function GET(req) {
                 select: { members: true, lectures: true },
               },
               lectures: {
-                where: { status: "LIVE" },
-                take: 1,
-                select: { id: true, title: true, status: true, startedAt: true },
+                take: 5,
+                orderBy: { createdAt: "desc" },
+                select: { id: true, title: true, status: true, startedAt: true, endedAt: true },
               },
             },
           },
@@ -58,7 +68,15 @@ export async function GET(req) {
       });
 
       const classrooms = memberships.map((m) => m.classroom);
-      return NextResponse.json({ classrooms }, { status: 200 });
+      return NextResponse.json(
+        { classrooms },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          },
+        }
+      );
     }
   } catch (error) {
     console.error("GET Classrooms Error:", error);

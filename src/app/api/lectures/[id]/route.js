@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/lectures/[id] - Fetch detailed lecture data
 export async function GET(req, { params }) {
   try {
@@ -57,7 +59,15 @@ export async function GET(req, { params }) {
       }
     }
 
-    return NextResponse.json({ lecture }, { status: 200 });
+    return NextResponse.json(
+      { lecture },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET Lecture [id] Error:", error);
     return NextResponse.json({ error: "Failed to fetch lecture details" }, { status: 500 });
@@ -91,7 +101,7 @@ export async function PATCH(req, { params }) {
     }
 
     const body = await req.json();
-    const { status, title } = body;
+    const { status, title, transcripts = [] } = body;
 
     const updateData = {};
     if (title) updateData.title = title.trim();
@@ -109,9 +119,36 @@ export async function PATCH(req, { params }) {
       data: updateData,
     });
 
+    // If transcripts were provided on conclusion, ensure any missing ones are saved
+    if (Array.isArray(transcripts) && transcripts.length > 0) {
+      const existingCount = await prisma.transcript.count({
+        where: { lectureId: id },
+      });
+      if (existingCount === 0) {
+        const formatted = transcripts
+          .filter((t) => t?.text)
+          .map((t) => ({
+            lectureId: id,
+            userId: t.speaker?.id || user.id,
+            text: t.text,
+            source: t.source || "SPEECH",
+            confidence: t.confidence || 0.95,
+            timestamp: t.timestamp ? new Date(t.timestamp) : new Date(),
+          }));
+        if (formatted.length > 0) {
+          await prisma.transcript.createMany({ data: formatted });
+        }
+      }
+    }
+
     return NextResponse.json(
       { message: "Lecture updated successfully", lecture: updated },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      }
     );
   } catch (error) {
     console.error("PATCH Lecture [id] Error:", error);

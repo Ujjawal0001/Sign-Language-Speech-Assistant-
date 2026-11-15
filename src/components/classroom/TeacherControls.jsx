@@ -82,13 +82,22 @@ export default function TeacherControls({
                 </button>
 
                 {lectureStatus === "COMPLETED" && (
-                  <Link
-                    href="/teacher/dashboard"
-                    className="flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs bg-auralis-dark text-white hover:bg-black transition-colors shadow-tactile"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Return to Dashboard</span>
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href="/lectures"
+                      className="flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs bg-auralis-accent text-white hover:bg-auralis-accent-hover transition-colors shadow-tactile"
+                    >
+                      <Sparkles className="w-4 h-4 text-white" />
+                      <span>View in Lecture History</span>
+                    </Link>
+                    <Link
+                      href="/teacher/dashboard"
+                      className="flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs bg-auralis-dark text-white hover:bg-black transition-colors shadow-tactile"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Return to Dashboard</span>
+                    </Link>
+                  </div>
                 )}
               </div>
             ) : (
