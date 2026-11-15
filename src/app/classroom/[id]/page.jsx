@@ -48,7 +48,7 @@ export default function LiveClassroomPage() {
   const canvasRef = useRef(null);
   const cameraStreamRef = useRef(null);
 
-  // Hydrate accessibility preferences from Student Dashboard
+  // Hydrate accessibility preferences from Student Dashboard & Instructor Settings
   useEffect(() => {
     try {
       const saved = localStorage.getItem("auralis_student_accessibility");
@@ -63,6 +63,16 @@ export default function LiveClassroomPage() {
             document.documentElement.classList.remove("high-contrast");
           }
         }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      const savedTeacher = localStorage.getItem("auralis_instructor_settings");
+      if (savedTeacher) {
+        const teacherPref = JSON.parse(savedTeacher);
+        if (teacherPref.speechLanguage) setSpeechLanguage(teacherPref.speechLanguage);
       }
     } catch (e) {
       // ignore

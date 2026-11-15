@@ -19,6 +19,15 @@ import {
   Loader2,
   AlertCircle,
   X,
+  Search,
+  CheckCircle2,
+  Mic,
+  Video,
+  Sliders,
+  Sparkles,
+  ShieldCheck,
+  Globe,
+  RotateCcw,
 } from "lucide-react";
 
 export default function TeacherDashboard() {
@@ -45,9 +54,47 @@ export default function TeacherDashboard() {
     return "Good evening";
   };
 
+  // Settings & Filter State
+  const [classroomsSearch, setClassroomsSearch] = useState("");
+  const [speechLanguage, setSpeechLanguage] = useState("en-IN");
+  const [gestureThreshold, setGestureThreshold] = useState(80);
+  const [autoArchive, setAutoArchive] = useState(true);
+  const [allowStudentGestures, setAllowStudentGestures] = useState(true);
+  const [saveToast, setSaveToast] = useState(false);
+
+  // Load saved instructor preferences on mount
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("auralis_instructor_settings");
+      if (saved) {
+        const pref = JSON.parse(saved);
+        if (pref.speechLanguage) setSpeechLanguage(pref.speechLanguage);
+        if (pref.gestureThreshold) setGestureThreshold(pref.gestureThreshold);
+        if (typeof pref.autoArchive === "boolean") setAutoArchive(pref.autoArchive);
+        if (typeof pref.allowStudentGestures === "boolean") setAllowStudentGestures(pref.allowStudentGestures);
+      }
+    } catch (e) {
+      // ignore
+    }
     fetchSessionAndClassrooms();
   }, []);
+
+  const saveSettings = (updates = {}) => {
+    const updated = {
+      speechLanguage,
+      gestureThreshold,
+      autoArchive,
+      allowStudentGestures,
+      ...updates,
+    };
+    try {
+      localStorage.setItem("auralis_instructor_settings", JSON.stringify(updated));
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2500);
+    } catch (e) {
+      // ignore
+    }
+  };
 
   const fetchSessionAndClassrooms = async () => {
     try {
@@ -273,162 +320,641 @@ export default function TeacherDashboard() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-            <div className="md:col-span-6 rounded-2xl bg-auralis-dark text-white p-7 flex flex-col justify-between shadow-float relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-auralis-accent/20 rounded-full blur-2xl pointer-events-none" />
-
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-auralis-secondary">
-                    Active Teaching Workspaces
-                  </span>
-                  <GraduationCap className="w-5 h-5 text-auralis-secondary" />
-                </div>
-                <div className="font-heading font-extrabold text-5xl text-white tracking-tight">
-                  {classrooms.length}
-                </div>
-                <p className="text-xs text-white/70 mt-2">
-                  Active academic classrooms configured with live speech-to-text and ISL gesture classification.
-                </p>
-              </div>
-
-              <div className="relative z-10 mt-6 pt-4 border-t border-white/15 flex items-center justify-between text-xs">
-                <span className="text-white/60">Room code sharing ready</span>
-                <span className="text-auralis-secondary font-mono font-semibold">100% In-Browser</span>
-              </div>
-            </div>
-
-            <div className="md:col-span-3 rounded-2xl bg-white border border-auralis-border p-6 flex flex-col justify-between shadow-tactile">
-              <div>
-                <div className="w-9 h-9 rounded-xl bg-auralis-highlight text-auralis-accent flex items-center justify-center mb-4">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div className="text-xs font-semibold text-auralis-muted uppercase tracking-wider">
-                  Enrolled Students
-                </div>
-                <div className="font-heading font-extrabold text-3xl text-auralis-text mt-1">
-                  {totalStudents}
-                </div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-auralis-border text-[11px] text-auralis-muted">
-                Across all your active classrooms.
-              </div>
-            </div>
-
-            <div className="md:col-span-3 rounded-2xl bg-white border border-auralis-border p-6 flex flex-col justify-between shadow-tactile">
-              <div>
-                <div className="w-9 h-9 rounded-xl bg-auralis-bg text-auralis-accent flex items-center justify-center mb-4 border border-auralis-border">
-                  <BookOpen className="w-4 h-4" />
-                </div>
-                <div className="text-xs font-semibold text-auralis-muted uppercase tracking-wider">
-                  Lectures Delivered
-                </div>
-                <div className="font-heading font-extrabold text-3xl text-auralis-text mt-1">
-                  {totalLectures}
-                </div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-auralis-border text-[11px] text-auralis-muted">
-                Archived with searchable transcripts.
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="font-heading font-bold text-xl text-auralis-text">
-                  Your Classrooms
-                </h2>
-                <p className="text-xs text-auralis-muted">
-                  Share the joining code with deaf and hearing students to start synchronized lectures.
-                </p>
-              </div>
-              <span className="text-xs font-mono text-auralis-muted bg-white px-2.5 py-1 rounded-md border border-auralis-border">
-                {classrooms.length} Classrooms
-              </span>
-            </div>
-
-            {classrooms.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-white border border-dashed border-auralis-border space-y-4">
-                <div className="w-12 h-12 rounded-xl bg-auralis-highlight text-auralis-accent mx-auto flex items-center justify-center">
-                  <GraduationCap className="w-6 h-6" />
-                </div>
+          {/* ========================================================= */}
+          {/* TAB 1: OVERVIEW */}
+          {/* ========================================================= */}
+          {activeTab === "overview" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-auralis-border">
                 <div>
-                  <h3 className="font-heading font-bold text-base text-auralis-text">
-                    No classrooms created yet
-                  </h3>
-                  <p className="text-xs text-auralis-muted max-w-sm mx-auto mt-1">
-                    Create your first classroom to generate a unique invite code and launch live caption broadcasts.
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-auralis-accent bg-auralis-highlight px-3 py-1 rounded-full border border-auralis-secondary/60">
+                    Instructor Workspace
+                  </span>
+                  <h1 className="font-heading font-extrabold text-3xl sm:text-4xl text-auralis-text tracking-tight mt-3">
+                    {getGreeting()}, {user?.name}
+                  </h1>
+                  <p className="text-sm text-auralis-muted mt-1">
+                    Your classroom is ready for more inclusive learning.
                   </p>
                 </div>
+
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-auralis-accent text-white text-xs font-bold shadow-tactile"
+                  className="inline-flex items-center gap-2.5 px-5 py-3.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm transition-all shadow-tactile hover:shadow shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-auralis-accent"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Create Classroom Now</span>
+                  <span>Create New Classroom</span>
                 </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {classrooms.map((cls) => (
-                  <div
-                    key={cls.id}
-                    className="p-5 rounded-2xl bg-white border border-auralis-border hover:border-auralis-accent/50 transition-all shadow-tactile flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="flex items-start sm:items-center gap-4">
-                      <div className="w-11 h-11 rounded-xl bg-auralis-highlight text-auralis-accent flex items-center justify-center font-bold font-heading text-base shrink-0">
-                        {cls.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-heading font-bold text-base text-auralis-text">
-                            {cls.name}
-                          </h3>
-                          <span className="text-[11px] font-semibold text-auralis-muted bg-auralis-bg px-2 py-0.5 rounded border border-auralis-border">
-                            {cls.subject}
-                          </span>
-                        </div>
-                        {cls.description && (
-                          <p className="text-xs text-auralis-muted mt-0.5 line-clamp-1">
-                            {cls.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4 mt-2 text-xs text-auralis-muted font-mono">
-                          <span>{cls._count?.members || 0} students enrolled</span>
-                          <span>•</span>
-                          <span>{cls._count?.lectures || 0} lectures recorded</span>
-                        </div>
-                      </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+                <div className="md:col-span-6 rounded-2xl bg-auralis-dark text-white p-7 flex flex-col justify-between shadow-float relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-auralis-accent/20 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-auralis-secondary">
+                        Active Teaching Workspaces
+                      </span>
+                      <GraduationCap className="w-5 h-5 text-auralis-secondary" />
                     </div>
+                    <div className="font-heading font-extrabold text-5xl text-white tracking-tight">
+                      {classrooms.length}
+                    </div>
+                    <p className="text-xs text-white/70 mt-2">
+                      Active academic classrooms configured with live speech-to-text and ISL gesture classification.
+                    </p>
+                  </div>
 
-                    <div className="flex items-center gap-3 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-auralis-border/60">
-                      <button
-                        onClick={() => handleCopyCode(cls.code)}
-                        className="px-3 py-2 rounded-xl bg-auralis-bg hover:bg-auralis-surface border border-auralis-border flex items-center gap-2 text-xs font-mono font-bold text-auralis-text transition-colors group"
-                        title="Click to copy student invite code"
-                      >
-                        <span className="text-auralis-accent">{cls.code}</span>
-                        {copiedCode === cls.code ? (
-                          <Check className="w-3.5 h-3.5 text-auralis-success" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-auralis-muted group-hover:text-auralis-text" />
-                        )}
-                      </button>
+                  <div className="relative z-10 mt-6 pt-4 border-t border-white/15 flex items-center justify-between text-xs">
+                    <span className="text-white/60">Room code sharing ready</span>
+                    <span className="text-auralis-secondary font-mono font-semibold">100% In-Browser</span>
+                  </div>
+                </div>
 
-                      <Link
-                        href={`/classroom/${cls.id}?role=teacher`}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold transition-all shadow-tactile"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                        <span>Start Lecture</span>
-                      </Link>
+                <div className="md:col-span-3 rounded-2xl bg-white border border-auralis-border p-6 flex flex-col justify-between shadow-tactile">
+                  <div>
+                    <div className="w-9 h-9 rounded-xl bg-auralis-highlight text-auralis-accent flex items-center justify-center mb-4">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div className="text-xs font-semibold text-auralis-muted uppercase tracking-wider">
+                      Enrolled Students
+                    </div>
+                    <div className="font-heading font-extrabold text-3xl text-auralis-text mt-1">
+                      {totalStudents}
                     </div>
                   </div>
-                ))}
+                  <div className="mt-4 pt-3 border-t border-auralis-border text-[11px] text-auralis-muted">
+                    Across all your active classrooms.
+                  </div>
+                </div>
+
+                <div className="md:col-span-3 rounded-2xl bg-white border border-auralis-border p-6 flex flex-col justify-between shadow-tactile">
+                  <div>
+                    <div className="w-9 h-9 rounded-xl bg-auralis-bg text-auralis-accent flex items-center justify-center mb-4 border border-auralis-border">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div className="text-xs font-semibold text-auralis-muted uppercase tracking-wider">
+                      Lectures Delivered
+                    </div>
+                    <div className="font-heading font-extrabold text-3xl text-auralis-text mt-1">
+                      {totalLectures}
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-auralis-border text-[11px] text-auralis-muted">
+                    Archived with searchable transcripts.
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="font-heading font-bold text-xl text-auralis-text">
+                      Recent Classrooms
+                    </h2>
+                    <p className="text-xs text-auralis-muted">
+                      Share the joining code with deaf and hearing students to start synchronized lectures.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("classrooms")}
+                    className="text-xs font-bold text-auralis-accent hover:underline"
+                  >
+                    View All ({classrooms.length}) →
+                  </button>
+                </div>
+
+                {classrooms.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl bg-white border border-dashed border-auralis-border space-y-4">
+                    <div className="w-12 h-12 rounded-xl bg-auralis-highlight text-auralis-accent mx-auto flex items-center justify-center">
+                      <GraduationCap className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-heading font-bold text-base text-auralis-text">
+                        No classrooms created yet
+                      </h3>
+                      <p className="text-xs text-auralis-muted max-w-sm mx-auto mt-1">
+                        Create your first classroom to generate a unique invite code and launch live caption broadcasts.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsModalOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-auralis-accent text-white text-xs font-bold shadow-tactile"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create Classroom Now</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {classrooms.slice(0, 4).map((cls) => (
+                      <div
+                        key={cls.id}
+                        className="p-5 rounded-2xl bg-white border border-auralis-border hover:border-auralis-accent/50 transition-all shadow-tactile flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div className="flex items-start sm:items-center gap-4">
+                          <div className="w-11 h-11 rounded-xl bg-auralis-highlight text-auralis-accent flex items-center justify-center font-bold font-heading text-base shrink-0">
+                            {cls.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-heading font-bold text-base text-auralis-text">
+                                {cls.name}
+                              </h3>
+                              <span className="text-[11px] font-semibold text-auralis-muted bg-auralis-bg px-2 py-0.5 rounded border border-auralis-border">
+                                {cls.subject}
+                              </span>
+                            </div>
+                            {cls.description && (
+                              <p className="text-xs text-auralis-muted mt-0.5 line-clamp-1">
+                                {cls.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-4 mt-2 text-xs text-auralis-muted font-mono">
+                              <span>{cls._count?.members || 0} students enrolled</span>
+                              <span>•</span>
+                              <span>{cls._count?.lectures || 0} lectures recorded</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-auralis-border/60">
+                          <button
+                            onClick={() => handleCopyCode(cls.code)}
+                            className="px-3 py-2 rounded-xl bg-auralis-bg hover:bg-auralis-surface border border-auralis-border flex items-center gap-2 text-xs font-mono font-bold text-auralis-text transition-colors group"
+                            title="Click to copy student invite code"
+                          >
+                            <span className="text-auralis-accent">{cls.code}</span>
+                            {copiedCode === cls.code ? (
+                              <Check className="w-3.5 h-3.5 text-auralis-success" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5 text-auralis-muted group-hover:text-auralis-text" />
+                            )}
+                          </button>
+
+                          <Link
+                            href={`/classroom/${cls.id}?role=teacher`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold transition-all shadow-tactile"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-white" />
+                            <span>Start Lecture</span>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 2: MY CLASSROOMS (DEDICATED MANAGER) */}
+          {/* ========================================================= */}
+          {activeTab === "classrooms" && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-auralis-border">
+                <div>
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-auralis-text">
+                    My Teaching Classrooms
+                  </h2>
+                  <p className="text-xs text-auralis-muted mt-1">
+                    Manage student invite codes, course details, and launch live lecture workspaces.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-xs shadow-tactile shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Classroom</span>
+                </button>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-auralis-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={classroomsSearch}
+                  onChange={(e) => setClassroomsSearch(e.target.value)}
+                  placeholder="Search classrooms by course name, subject, or AURA code..."
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text placeholder:text-auralis-muted shadow-tactile focus:outline-none focus:ring-2 focus:ring-auralis-accent"
+                />
+              </div>
+
+              {/* Classrooms List */}
+              {classrooms.filter(
+                (c) =>
+                  !classroomsSearch.trim() ||
+                  c.name.toLowerCase().includes(classroomsSearch.toLowerCase()) ||
+                  c.subject.toLowerCase().includes(classroomsSearch.toLowerCase()) ||
+                  c.code.toLowerCase().includes(classroomsSearch.toLowerCase())
+              ).length === 0 ? (
+                <div className="p-12 text-center rounded-2xl bg-white border border-dashed border-auralis-border space-y-3">
+                  <BookOpen className="w-10 h-10 text-auralis-muted mx-auto" />
+                  <h3 className="font-heading font-bold text-base text-auralis-text">
+                    No matching classrooms found
+                  </h3>
+                  <p className="text-xs text-auralis-muted">
+                    {classroomsSearch ? "Try adjusting your search keywords." : "Create a classroom to get started."}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {classrooms
+                    .filter(
+                      (c) =>
+                        !classroomsSearch.trim() ||
+                        c.name.toLowerCase().includes(classroomsSearch.toLowerCase()) ||
+                        c.subject.toLowerCase().includes(classroomsSearch.toLowerCase()) ||
+                        c.code.toLowerCase().includes(classroomsSearch.toLowerCase())
+                    )
+                    .map((cls) => (
+                      <div
+                        key={cls.id}
+                        className="p-6 rounded-2xl bg-white border border-auralis-border hover:border-auralis-accent/50 transition-all shadow-tactile flex flex-col justify-between space-y-5"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-mono font-semibold text-auralis-accent bg-auralis-highlight px-2.5 py-1 rounded">
+                              {cls.subject}
+                            </span>
+                            <button
+                              onClick={() => handleCopyCode(cls.code)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-auralis-bg border border-auralis-border text-xs font-mono font-bold text-auralis-text hover:bg-auralis-surface"
+                              title="Click to copy student code"
+                            >
+                              <span>{cls.code}</span>
+                              {copiedCode === cls.code ? (
+                                <Check className="w-3 h-3 text-auralis-success" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-auralis-muted" />
+                              )}
+                            </button>
+                          </div>
+
+                          <h3 className="font-heading font-bold text-lg text-auralis-text">
+                            {cls.name}
+                          </h3>
+                          {cls.description && (
+                            <p className="text-xs text-auralis-muted mt-1.5 line-clamp-2">
+                              {cls.description}
+                            </p>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-auralis-border/60 text-xs font-mono text-auralis-muted">
+                            <div>
+                              <span className="text-auralis-text font-bold block">{cls._count?.members || 0}</span>
+                              <span>Students</span>
+                            </div>
+                            <div>
+                              <span className="text-auralis-text font-bold block">{cls._count?.lectures || 0}</span>
+                              <span>Lectures</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 pt-2">
+                          <Link
+                            href={`/classroom/${cls.id}?role=teacher`}
+                            className="flex-1 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold text-center flex items-center justify-center gap-2 shadow-tactile transition-all"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-white" />
+                            <span>Launch Lecture</span>
+                          </Link>
+                          <Link
+                            href="/lectures"
+                            className="px-3.5 py-2.5 rounded-xl bg-auralis-bg hover:bg-auralis-surface border border-auralis-border text-xs font-semibold text-auralis-text transition-colors"
+                          >
+                            Past Lectures
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 3: LIVE SESSIONS (TEACHING HUB) */}
+          {/* ========================================================= */}
+          {activeTab === "sessions" && (
+            <div className="space-y-8">
+              <div className="pb-6 border-b border-auralis-border">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-auralis-accent bg-auralis-highlight px-3 py-1 rounded-full border border-auralis-secondary/60">
+                  Real-Time Broadcast
+                </span>
+                <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-auralis-text tracking-tight mt-3">
+                  Live Classroom Broadcast Hub
+                </h2>
+                <p className="text-xs text-auralis-muted mt-1 max-w-xl">
+                  Select any course to launch an interactive live lecture with synchronized speech captioning, interim-to-final processing, and student sign recognition.
+                </p>
+              </div>
+
+              {/* Hardware & AI Engine Telemetry Card */}
+              <div className="p-6 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Hardware &amp; AI Engine Readiness Status</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <Mic className="w-4 h-4 text-auralis-success" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-auralis-text">Web Speech STT</div>
+                      <div className="text-[11px] text-auralis-success font-semibold mt-0.5">Ready ({speechLanguage})</div>
+                      <p className="text-[10px] text-auralis-muted mt-1">Interim caption streaming enabled.</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <Video className="w-4 h-4 text-auralis-success" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-auralis-text">MediaPipe ISL Vision</div>
+                      <div className="text-[11px] text-auralis-success font-semibold mt-0.5">Ready (21 3D Landmarks)</div>
+                      <p className="text-[10px] text-auralis-muted mt-1">Kinematic gesture classifier active.</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                      <Radio className="w-4 h-4 text-auralis-success" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-auralis-text">Classroom Socket</div>
+                      <div className="text-[11px] text-auralis-success font-semibold mt-0.5">Broadcasting Ready</div>
+                      <p className="text-[10px] text-auralis-muted mt-1">Multi-client classroom sync.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Classroom Launch Cards */}
+              <div>
+                <h3 className="font-heading font-bold text-lg text-auralis-text mb-3">
+                  Choose Classroom to Start Teaching
+                </h3>
+
+                {classrooms.length === 0 ? (
+                  <div className="p-10 text-center rounded-2xl bg-white border border-dashed border-auralis-border">
+                    <p className="text-xs text-auralis-muted">No classrooms available. Create a classroom first to start teaching.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {classrooms.map((cls) => (
+                      <div
+                        key={cls.id}
+                        className="p-5 rounded-2xl bg-white border border-auralis-border hover:border-auralis-accent/50 shadow-tactile flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-bold text-auralis-accent bg-auralis-highlight px-2 py-0.5 rounded">
+                              {cls.code}
+                            </span>
+                            <h4 className="font-heading font-bold text-base text-auralis-text">
+                              {cls.name}
+                            </h4>
+                          </div>
+                          <p className="text-xs text-auralis-muted mt-1">
+                            {cls.subject} • {cls._count?.members || 0} students ready to connect
+                          </p>
+                        </div>
+
+                        <Link
+                          href={`/classroom/${cls.id}?role=teacher`}
+                          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all shrink-0"
+                        >
+                          <Play className="w-4 h-4 fill-white" />
+                          <span>Start Live Broadcast Now</span>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 4: SETTINGS (INSTRUCTOR PREFERENCES) */}
+          {/* ========================================================= */}
+          {activeTab === "settings" && (
+            <div className="space-y-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-auralis-border">
+                <div>
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-auralis-text">
+                    Instructor Preferences &amp; AI Settings
+                  </h2>
+                  <p className="text-xs text-auralis-muted mt-1">
+                    Configure your preferred lecture speech recognition language, sign gesture sensitivity, and broadcasting defaults.
+                  </p>
+                </div>
+
+                {saveToast && (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold animate-pulse shadow-tactile shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-auralis-success" />
+                    <span>Settings Saved &amp; Synced</span>
+                  </div>
+                )}
+              </div>
+
+              {/* PROFILE CARD */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Instructor Account Profile</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border">
+                    <span className="text-[10px] uppercase font-bold text-auralis-muted block">Faculty Name</span>
+                    <span className="text-sm font-bold text-auralis-text mt-1 block">{user?.name}</span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border">
+                    <span className="text-[10px] uppercase font-bold text-auralis-muted block">Email Address</span>
+                    <span className="text-sm font-bold text-auralis-text mt-1 block truncate">{user?.email}</span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border">
+                    <span className="text-[10px] uppercase font-bold text-auralis-muted block">Platform Role</span>
+                    <span className="text-xs font-bold text-auralis-accent bg-auralis-highlight px-2 py-0.5 rounded inline-block mt-1">
+                      FACULTY INSTRUCTOR
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SPEECH-TO-TEXT LANGUAGE */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Globe className="w-4 h-4" />
+                  <span>Primary Spoken Lecture Language</span>
+                </div>
+                <p className="text-xs text-auralis-muted">
+                  The Web Speech engine tunes phonetic models to this language for higher caption accuracy.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                  {[
+                    { code: "en-IN", label: "English (India)", desc: "Optimized for Indian academic accents" },
+                    { code: "en-US", label: "English (US)", desc: "Standard international English" },
+                    { code: "hi-IN", label: "Hindi (भारत)", desc: "Devanagari script captioning" },
+                    { code: "ta-IN", label: "Tamil (தமிழ்)", desc: "Tamil academic speech" },
+                    { code: "te-IN", label: "Telugu (తెలుగు)", desc: "Telugu academic speech" },
+                  ].map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => {
+                        setSpeechLanguage(lang.code);
+                        saveSettings({ speechLanguage: lang.code });
+                      }}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        speechLanguage === lang.code
+                          ? "border-auralis-accent bg-auralis-highlight/60 ring-2 ring-auralis-accent shadow-tactile"
+                          : "border-auralis-border bg-white hover:bg-auralis-bg"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-heading font-bold text-sm text-auralis-text">{lang.label}</span>
+                        {speechLanguage === lang.code && <Check className="w-4 h-4 text-auralis-accent" />}
+                      </div>
+                      <span className="text-[10px] font-mono text-auralis-accent font-semibold block">{lang.code}</span>
+                      <p className="text-[11px] text-auralis-muted mt-1 leading-normal">{lang.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ISL GESTURE SENSITIVITY */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Sliders className="w-4 h-4" />
+                  <span>Indian Sign Language (ISL) Vision Sensitivity</span>
+                </div>
+                <p className="text-xs text-auralis-muted">
+                  Minimum geometric confidence required before a student or instructor sign is committed to the live caption record.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  {[
+                    { val: 70, label: "Fast (70%)", desc: "Faster recognition, tolerates motion blur" },
+                    { val: 80, label: "Balanced (80%)", desc: "Recommended balance of speed & precision" },
+                    { val: 90, label: "Strict (90%)", desc: "Eliminates false positives in noisy lighting" },
+                  ].map((t) => (
+                    <button
+                      key={t.val}
+                      type="button"
+                      onClick={() => {
+                        setGestureThreshold(t.val);
+                        saveSettings({ gestureThreshold: t.val });
+                      }}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        gestureThreshold === t.val
+                          ? "border-auralis-accent bg-auralis-highlight/60 ring-2 ring-auralis-accent shadow-tactile"
+                          : "border-auralis-border bg-white hover:bg-auralis-bg"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-heading font-bold text-sm text-auralis-text">{t.label}</span>
+                        {gestureThreshold === t.val && <Check className="w-4 h-4 text-auralis-accent" />}
+                      </div>
+                      <p className="text-[11px] text-auralis-muted leading-normal">{t.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* BROADCAST & ARCHIVE PREFERENCES */}
+              <div className="p-6 sm:p-8 rounded-2xl bg-white border border-auralis-border shadow-tactile space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-auralis-accent">
+                  <Radio className="w-4 h-4" />
+                  <span>Broadcast &amp; Archival Defaults</span>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoArchive}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setAutoArchive(val);
+                        saveSettings({ autoArchive: val });
+                      }}
+                      className="w-4 h-4 text-auralis-accent rounded border-auralis-border focus:ring-auralis-accent"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-auralis-text">Automatic Transcript Archival</span>
+                      <p className="text-[11px] text-auralis-muted">
+                        Automatically publishes lecture transcripts to enrolled students upon ending a live lecture.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={allowStudentGestures}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setAllowStudentGestures(val);
+                        saveSettings({ allowStudentGestures: val });
+                      }}
+                      className="w-4 h-4 text-auralis-accent rounded border-auralis-border focus:ring-auralis-accent"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-auralis-text">Enable Student Sign Question Broadcast</span>
+                      <p className="text-[11px] text-auralis-muted">
+                        Allows deaf and hard-of-hearing students to ask questions via sign language from their desks.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* FOOTER */}
+              <div className="flex items-center justify-between pt-4 border-t border-auralis-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaults = {
+                      speechLanguage: "en-IN",
+                      gestureThreshold: 80,
+                      autoArchive: true,
+                      allowStudentGestures: true,
+                    };
+                    setSpeechLanguage("en-IN");
+                    setGestureThreshold(80);
+                    setAutoArchive(true);
+                    setAllowStudentGestures(true);
+                    saveSettings(defaults);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-auralis-border text-xs font-bold text-auralis-muted hover:text-auralis-text hover:bg-auralis-bg transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset to Defaults</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("overview")}
+                  className="px-6 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all"
+                >
+                  Return to Overview
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
