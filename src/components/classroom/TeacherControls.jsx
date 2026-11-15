@@ -17,6 +17,7 @@ import {
   Hand,
   CheckCircle2,
   ArrowRight,
+  BarChart3,
 } from "lucide-react";
 
 export default function TeacherControls({
@@ -32,6 +33,7 @@ export default function TeacherControls({
   isActionLoading = false,
   isCameraActive = false,
   onToggleCamera = null,
+  onOpenPollModal = null,
 }) {
   const [showEndModal, setShowEndModal] = useState(false);
 
@@ -113,6 +115,23 @@ export default function TeacherControls({
                     </>
                   )}
                 </button>
+
+                {/* Launch Live Poll */}
+                {onOpenPollModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenPollModal}
+                    className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-heading font-bold text-xs transition-all border ${
+                      isHighContrast
+                        ? "bg-white/10 hover:bg-white/20 text-white border-white/20"
+                        : "bg-auralis-highlight hover:bg-auralis-surface text-auralis-accent border-auralis-secondary shadow-tactile"
+                    }`}
+                    title="Launch an interactive live poll for students"
+                  >
+                    <BarChart3 className="w-4 h-4 text-auralis-accent" />
+                    <span>Live Poll</span>
+                  </button>
+                )}
 
                 {/* Stop / Conclude Lecture */}
                 <button

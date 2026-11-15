@@ -17,6 +17,10 @@ export default function StudentControls({
   toggleHighContrast,
   isCameraActive = false,
   onToggleCamera,
+  onOpenDoubtModal,
+  isDoubtPending = false,
+  activePoll = null,
+  onOpenPollModal = null,
 }) {
   return (
     <div
@@ -50,6 +54,33 @@ export default function StudentControls({
 
         {/* Right: Quick accessibility buttons */}
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Active Poll Prompt if live */}
+          {activePoll && !activePoll.isEnded && onOpenPollModal && (
+            <button
+              onClick={onOpenPollModal}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-auralis-accent text-white shadow-tactile animate-pulse"
+            >
+              <span>📊 Active Class Poll</span>
+            </button>
+          )}
+
+          {/* Raise Hand / Doubt Button */}
+          {onOpenDoubtModal && (
+            <button
+              onClick={onOpenDoubtModal}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-tactile ${
+                isDoubtPending
+                  ? "bg-amber-500 text-white animate-pulse"
+                  : isHighContrast
+                  ? "bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                  : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
+              }`}
+            >
+              <Hand className="w-3.5 h-3.5 text-amber-500" />
+              <span>{isDoubtPending ? "✋ Hand Raised" : "Raise Hand / Ask Doubt"}</span>
+            </button>
+          )}
+
           {/* Sign Language participation toggle */}
           {onToggleCamera && (
             <button

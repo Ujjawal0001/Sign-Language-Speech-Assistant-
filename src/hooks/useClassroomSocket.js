@@ -11,6 +11,11 @@ export function useClassroomSocket({
   onFinalCaption,
   onSignDetected,
   onLectureStatusChange,
+  onStudentDoubtRaised,
+  onStudentDoubtAcknowledged,
+  onPollLaunch,
+  onPollVoteUpdate,
+  onPollEnd,
 }) {
   const socketRef = useRef(null);
   const [connectionStatus, setConnectionStatus] = useState("CONNECTING"); // CONNECTING | CONNECTED | OFFLINE | ERROR
@@ -21,6 +26,11 @@ export function useClassroomSocket({
   const onFinalCaptionRef = useRef(onFinalCaption);
   const onSignDetectedRef = useRef(onSignDetected);
   const onLectureStatusChangeRef = useRef(onLectureStatusChange);
+  const onStudentDoubtRaisedRef = useRef(onStudentDoubtRaised);
+  const onStudentDoubtAcknowledgedRef = useRef(onStudentDoubtAcknowledged);
+  const onPollLaunchRef = useRef(onPollLaunch);
+  const onPollVoteUpdateRef = useRef(onPollVoteUpdate);
+  const onPollEndRef = useRef(onPollEnd);
 
   useEffect(() => {
     onInterimCaptionRef.current = onInterimCaption;
@@ -37,6 +47,26 @@ export function useClassroomSocket({
   useEffect(() => {
     onLectureStatusChangeRef.current = onLectureStatusChange;
   }, [onLectureStatusChange]);
+
+  useEffect(() => {
+    onStudentDoubtRaisedRef.current = onStudentDoubtRaised;
+  }, [onStudentDoubtRaised]);
+
+  useEffect(() => {
+    onStudentDoubtAcknowledgedRef.current = onStudentDoubtAcknowledged;
+  }, [onStudentDoubtAcknowledged]);
+
+  useEffect(() => {
+    onPollLaunchRef.current = onPollLaunch;
+  }, [onPollLaunch]);
+
+  useEffect(() => {
+    onPollVoteUpdateRef.current = onPollVoteUpdate;
+  }, [onPollVoteUpdate]);
+
+  useEffect(() => {
+    onPollEndRef.current = onPollEnd;
+  }, [onPollEnd]);
 
   const activeRoomId = lectureId || (classroomId ? `class_${classroomId}` : null);
 
@@ -113,6 +143,36 @@ export function useClassroomSocket({
       }
     });
 
+    socket.on("student-doubt-raised", (data) => {
+      if (onStudentDoubtRaisedRef.current) {
+        onStudentDoubtRaisedRef.current(data);
+      }
+    });
+
+    socket.on("student-doubt-acknowledged", (data) => {
+      if (onStudentDoubtAcknowledgedRef.current) {
+        onStudentDoubtAcknowledgedRef.current(data);
+      }
+    });
+
+    socket.on("poll-launch", (data) => {
+      if (onPollLaunchRef.current) {
+        onPollLaunchRef.current(data);
+      }
+    });
+
+    socket.on("poll-vote-update", (data) => {
+      if (onPollVoteUpdateRef.current) {
+        onPollVoteUpdateRef.current(data);
+      }
+    });
+
+    socket.on("poll-end", (data) => {
+      if (onPollEndRef.current) {
+        onPollEndRef.current(data);
+      }
+    });
+
     socket.on("connect_error", (err) => {
       console.warn("[useClassroomSocket] Connection error:", err.message);
       setConnectionStatus("OFFLINE");
@@ -186,6 +246,80 @@ export function useClassroomSocket({
     [activeRoomId, classroomId]
   );
 
+  const raiseStudentDoubt = useCallback(
+    ({ gesture = "QUESTION", question = "" } = {}) => {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit("student-doubt-raised", {
+          lectureId: activeRoomId,
+          classroomId,
+          studentId: user?.id,
+          studentName: user?.name || "Student",
+          gesture,
+          question,
+        });
+      }
+    },
+    [activeRoomId, classroomId, user?.id, user?.name]
+  );
+
+  const acknowledgeStudentDoubt = useCallback(
+    ({ studentId, studentName }) => {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit("student-doubt-acknowledged", {
+          lectureId: activeRoomId,
+          classroomId,
+          studentId,
+          studentName,
+        });
+      }
+    },
+    [activeRoomId, classroomId]
+  );
+
+  const launchLivePoll = useCallback(
+    (pollData) => {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit("poll-launch", {
+          lectureId: activeRoomId,
+          classroomId,
+          ...pollData,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    },
+    [activeRoomId, classroomId]
+  );
+
+  const submitPollVote = useCallback(
+    ({ pollId, optionIndex, voteMethod = "CLICK" }) => {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit("poll-vote", {
+          lectureId: activeRoomId,
+          classroomId,
+          pollId,
+          optionIndex,
+          studentId: user?.id,
+          studentName: user?.name || "Student",
+          voteMethod,
+        });
+      }
+    },
+    [activeRoomId, classroomId, user?.id, user?.name]
+  );
+
+  const endLivePoll = useCallback(
+    (pollId) => {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit("poll-end", {
+          lectureId: activeRoomId,
+          classroomId,
+          pollId,
+        });
+      }
+    },
+    [activeRoomId, classroomId]
+  );
+
   return {
     connectionStatus,
     participantCount,
@@ -193,5 +327,10 @@ export function useClassroomSocket({
     sendFinalCaption,
     sendSignGesture,
     updateLectureStatus,
+    raiseStudentDoubt,
+    acknowledgeStudentDoubt,
+    launchLivePoll,
+    submitPollVote,
+    endLivePoll,
   };
 }

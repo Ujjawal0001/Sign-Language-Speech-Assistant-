@@ -20,6 +20,9 @@ import CaptionView from "@/components/classroom/CaptionView";
 import SidePanel from "@/components/classroom/SidePanel";
 import TeacherControls from "@/components/classroom/TeacherControls";
 import StudentControls from "@/components/classroom/StudentControls";
+import LivePollModal from "@/components/classroom/LivePollModal";
+import StudentDoubtModal from "@/components/classroom/StudentDoubtModal";
+import TeacherDoubtAlert from "@/components/classroom/TeacherDoubtAlert";
 
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useClassroomSocket } from "@/hooks/useClassroomSocket";
@@ -52,6 +55,17 @@ export default function LiveClassroomPage() {
   // Class Concluded & Student Auto-Close State
   const [isClassConcluded, setIsClassConcluded] = useState(false);
   const [autoRedirectCountdown, setAutoRedirectCountdown] = useState(5);
+
+  // Live In-Class Interactive Polls State
+  const [isPollModalOpen, setIsPollModalOpen] = useState(false);
+  const [activePoll, setActivePoll] = useState(null);
+  const [userVotedOptionIndex, setUserVotedOptionIndex] = useState(null);
+
+  // Student Doubt & Hand Raising State
+  const [isDoubtModalOpen, setIsDoubtModalOpen] = useState(false);
+  const [isDoubtPending, setIsDoubtPending] = useState(false);
+  const [pendingDoubts, setPendingDoubts] = useState([]);
+  const [doubtAcknowledgedToast, setDoubtAcknowledgedToast] = useState(null);
 
   const isTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
 
@@ -284,6 +298,78 @@ export default function LiveClassroomPage() {
     [user?.role, classroom?.teacherId, urlRole]
   );
 
+  // Student Doubt Socket Listeners
+  const handleSocketStudentDoubtRaised = useCallback(
+    (doubtData) => {
+      if (isTeacher) {
+        setPendingDoubts((prev) => [...prev, doubtData]);
+      }
+      const doubtTranscript = {
+        id: `doubt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        text: `✋ [Doubt / Question from ${doubtData.studentName}]: "${doubtData.question || doubtData.gesture}"`,
+        source: "SIGN_LANGUAGE",
+        confidence: 1.0,
+        timestamp: doubtData.timestamp || new Date().toISOString(),
+        speaker: { name: doubtData.studentName },
+      };
+      setTranscripts((prev) => [...prev, doubtTranscript]);
+    },
+    [isTeacher]
+  );
+
+  const handleSocketStudentDoubtAcknowledged = useCallback(
+    (data) => {
+      if (data?.studentId === user?.id) {
+        setIsDoubtPending(false);
+        setDoubtAcknowledgedToast("Instructor acknowledged your doubt! You have the floor.");
+        setTimeout(() => setDoubtAcknowledgedToast(null), 5000);
+      }
+      setPendingDoubts((prev) => prev.filter((d) => d.studentId !== data.studentId));
+
+      const ackTranscript = {
+        id: `ack-${Date.now()}`,
+        text: `✅ [Instructor Acknowledged Doubt]: Giving floor to ${data.studentName || "Student"}.`,
+        source: "SPEECH",
+        confidence: 1.0,
+        timestamp: new Date().toISOString(),
+        speaker: { name: "Instructor" },
+      };
+      setTranscripts((prev) => [...prev, ackTranscript]);
+    },
+    [user?.id]
+  );
+
+  // Live Poll Socket Listeners
+  const handleSocketPollLaunch = useCallback((pollData) => {
+    setActivePoll({
+      ...pollData,
+      votes: pollData.options.map(() => ({ count: 0 })),
+      isEnded: false,
+    });
+    setUserVotedOptionIndex(null);
+    setIsPollModalOpen(true);
+  }, []);
+
+  const handleSocketPollVoteUpdate = useCallback((voteData) => {
+    setActivePoll((current) => {
+      if (!current) return current;
+      const updatedVotes = (current.votes || current.options.map(() => ({ count: 0 }))).map((v, idx) => {
+        if (idx === voteData.optionIndex) {
+          return { ...v, count: (v.count || 0) + 1 };
+        }
+        return v;
+      });
+      return { ...current, votes: updatedVotes };
+    });
+  }, []);
+
+  const handleSocketPollEnd = useCallback((data) => {
+    setActivePoll((current) => {
+      if (!current) return null;
+      return { ...current, isEnded: true };
+    });
+  }, []);
+
   // Auto-redirect countdown when class is concluded for student
   useEffect(() => {
     let timer = null;
@@ -335,6 +421,11 @@ export default function LiveClassroomPage() {
     sendFinalCaption,
     sendSignGesture,
     updateLectureStatus,
+    raiseStudentDoubt,
+    acknowledgeStudentDoubt,
+    launchLivePoll,
+    submitPollVote,
+    endLivePoll,
   } = useClassroomSocket({
     classroomId,
     lectureId: currentLecture?.id,
@@ -343,6 +434,11 @@ export default function LiveClassroomPage() {
     onFinalCaption: handleSocketFinalCaption,
     onSignDetected: handleSocketSignDetected,
     onLectureStatusChange: handleSocketLectureStatusChange,
+    onStudentDoubtRaised: handleSocketStudentDoubtRaised,
+    onStudentDoubtAcknowledged: handleSocketStudentDoubtAcknowledged,
+    onPollLaunch: handleSocketPollLaunch,
+    onPollVoteUpdate: handleSocketPollVoteUpdate,
+    onPollEnd: handleSocketPollEnd,
   });
 
   // Speech Recognition Final Transcript Handler
@@ -688,6 +784,117 @@ export default function LiveClassroomPage() {
     }
   };
 
+  // Teacher Doubt Handlers
+  const handleTeacherAcknowledgeDoubt = (doubt) => {
+    acknowledgeStudentDoubt({
+      studentId: doubt.studentId,
+      studentName: doubt.studentName,
+    });
+    setPendingDoubts((prev) => prev.filter((d) => d !== doubt));
+  };
+
+  const handleTeacherDismissDoubt = (doubt) => {
+    setPendingDoubts((prev) => prev.filter((d) => d !== doubt));
+  };
+
+  // Student Doubt Handlers
+  const handleStudentSubmitDoubt = (doubtPayload) => {
+    setIsDoubtPending(true);
+    raiseStudentDoubt(doubtPayload);
+  };
+
+  // Live Poll Handlers
+  const handleTeacherLaunchPoll = (pollData) => {
+    launchLivePoll(pollData);
+    setActivePoll({
+      ...pollData,
+      votes: pollData.options.map(() => ({ count: 0 })),
+      isEnded: false,
+    });
+    setIsPollModalOpen(true);
+  };
+
+  const handleStudentVotePoll = useCallback(
+    (optionIndex, method = "CLICK") => {
+      if (!activePoll || userVotedOptionIndex !== null) return;
+      setUserVotedOptionIndex(optionIndex);
+      submitPollVote({
+        pollId: activePoll.id,
+        optionIndex,
+        voteMethod: method,
+      });
+
+      // Optimistic local update
+      setActivePoll((current) => {
+        if (!current) return current;
+        const updatedVotes = (current.votes || current.options.map(() => ({ count: 0 }))).map((v, idx) => {
+          if (idx === optionIndex) {
+            return { ...v, count: (v.count || 0) + 1 };
+          }
+          return v;
+        });
+        return { ...current, votes: updatedVotes };
+      });
+    },
+    [activePoll, userVotedOptionIndex, submitPollVote]
+  );
+
+  const handleTeacherEndPoll = (pollId) => {
+    endLivePoll(pollId);
+    setActivePoll((current) => (current ? { ...current, isEnded: true } : null));
+
+    if (activePoll) {
+      const total = (activePoll.votes || []).reduce((a, b) => a + (b.count || 0), 0);
+      const breakdown = activePoll.options
+        .map((opt, i) => {
+          const count = activePoll.votes?.[i]?.count || 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          return `${opt}: ${pct}% (${count})`;
+        })
+        .join(", ");
+
+      const resultTranscript = {
+        id: `pollres-${Date.now()}`,
+        text: `📊 [POLL RESULTS] "${activePoll.question}" — ${breakdown}`,
+        source: "SPEECH",
+        confidence: 1.0,
+        timestamp: new Date().toISOString(),
+        speaker: { name: "Live Class Poll" },
+      };
+      setTranscripts((prev) => [...prev, resultTranscript]);
+      sendFinalCaption(resultTranscript);
+    }
+  };
+
+  // Sign Language Multimodal Shortcut for Polls & Doubts
+  useEffect(() => {
+    if (!activeGesture?.isSign || isTeacher) return;
+
+    const g = String(activeGesture.gesture).toUpperCase();
+
+    // 1. If active poll is open and student hasn't voted: detect A, B, C, D gestures
+    if (activePoll && !activePoll.isEnded && userVotedOptionIndex === null) {
+      const letterIndex = ["A", "B", "C", "D"].indexOf(g);
+      if (letterIndex !== -1 && letterIndex < activePoll.options.length) {
+        handleStudentVotePoll(letterIndex, "SIGN_GESTURE");
+      }
+    }
+
+    // 2. If student signs QUESTION or HELP: automatically raise doubt
+    if ((g === "QUESTION" || g === "HELP") && !isDoubtPending) {
+      setIsDoubtPending(true);
+      raiseStudentDoubt({ gesture: g, question: `Raised doubt via sign gesture: ${g}` });
+    }
+  }, [
+    activeGesture,
+    isTeacher,
+    activePoll,
+    userVotedOptionIndex,
+    isDoubtPending,
+    handleStudentVotePoll,
+    raiseStudentDoubt,
+  ]);
+
   // Filter transcripts by search query if user searches
   const filteredTranscripts = searchQuery.trim()
     ? transcripts.filter((t) =>
@@ -842,6 +1049,7 @@ export default function LiveClassroomPage() {
             isActionLoading={isActionLoading}
             isCameraActive={isCameraActive}
             onToggleCamera={toggleCamera}
+            onOpenPollModal={() => setIsPollModalOpen(true)}
           />
         ) : (
           <StudentControls
@@ -851,6 +1059,10 @@ export default function LiveClassroomPage() {
             toggleHighContrast={() => setIsHighContrast(!isHighContrast)}
             isCameraActive={isCameraActive}
             onToggleCamera={toggleCamera}
+            onOpenDoubtModal={() => setIsDoubtModalOpen(true)}
+            isDoubtPending={isDoubtPending}
+            activePoll={activePoll}
+            onOpenPollModal={() => setIsPollModalOpen(true)}
           />
         )}
 
@@ -970,6 +1182,49 @@ export default function LiveClassroomPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Teacher Floating Student Doubt Notifications */}
+      {isTeacher && (
+        <TeacherDoubtAlert
+          doubts={pendingDoubts}
+          onAcknowledge={handleTeacherAcknowledgeDoubt}
+          onDismiss={handleTeacherDismissDoubt}
+          isHighContrast={isHighContrast}
+        />
+      )}
+
+      {/* Student Doubt Acknowledged Toast Alert */}
+      {!isTeacher && doubtAcknowledgedToast && (
+        <div className="fixed top-20 right-4 z-50 p-4 rounded-2xl bg-emerald-600 text-white shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span className="text-xs font-bold">{doubtAcknowledgedToast}</span>
+        </div>
+      )}
+
+      {/* In-Class Live Poll Modal (Teacher & Student) */}
+      <LivePollModal
+        isOpen={isPollModalOpen}
+        onClose={() => setIsPollModalOpen(false)}
+        isTeacher={isTeacher}
+        activePoll={activePoll}
+        onLaunchPoll={handleTeacherLaunchPoll}
+        onVote={handleStudentVotePoll}
+        onEndPoll={handleTeacherEndPoll}
+        isHighContrast={isHighContrast}
+        userVotedOptionIndex={userVotedOptionIndex}
+        activeSign={activeSign}
+      />
+
+      {/* Student Raise Hand / Ask Doubt Modal */}
+      {!isTeacher && (
+        <StudentDoubtModal
+          isOpen={isDoubtModalOpen}
+          onClose={() => setIsDoubtModalOpen(false)}
+          onSubmitDoubt={handleStudentSubmitDoubt}
+          isCameraActive={isCameraActive}
+          isHighContrast={isHighContrast}
+        />
       )}
     </div>
   );

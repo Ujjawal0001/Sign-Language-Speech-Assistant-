@@ -137,6 +137,87 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Student Doubt / Raise Hand via Sign Language or Click
+  socket.on("student-doubt-raised", (payload) => {
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    const doubtData = {
+      studentId: payload?.studentId || socket.data?.userId,
+      studentName: payload?.studentName || socket.data?.userName || "Student",
+      gesture: payload?.gesture || "QUESTION",
+      question: payload?.question || "",
+      timestamp: new Date().toISOString(),
+    };
+
+    for (const r of rooms) {
+      io.to(r).emit("student-doubt-raised", doubtData);
+    }
+  });
+
+  // Instructor Acknowledges Student Doubt
+  socket.on("student-doubt-acknowledged", (payload) => {
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("student-doubt-acknowledged", {
+        studentId: payload?.studentId,
+        studentName: payload?.studentName,
+      });
+    }
+  });
+
+  // In-Class Live Poll Launch
+  socket.on("poll-launch", (payload) => {
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("poll-launch", payload);
+    }
+  });
+
+  // In-Class Live Poll Vote (Sign, Voice or Click)
+  socket.on("poll-vote", (payload) => {
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("poll-vote-update", payload);
+    }
+  });
+
+  // In-Class Live Poll End
+  socket.on("poll-end", (payload) => {
+    const lectureId = payload?.lectureId || socket.data?.lectureId;
+    const classroomId = payload?.classroomId || socket.data?.classroomId;
+    const rooms = new Set();
+    if (lectureId) rooms.add(lectureId);
+    if (classroomId) rooms.add(`class_${classroomId}`);
+    if (rooms.size === 0) return;
+
+    for (const r of rooms) {
+      io.to(r).emit("poll-end", payload);
+    }
+  });
+
   // Leave lecture room
   socket.on("leave-lecture", (payload) => {
     const target = payload?.lectureId || (payload?.classroomId ? `class_${payload.classroomId}` : null) || socket.data?.lectureId;
