@@ -89,10 +89,12 @@ export async function POST(req) {
     const parseResult = createClassroomSchema.safeParse(body);
 
     if (!parseResult.success) {
+      const fieldErrors = parseResult.error.flatten().fieldErrors;
+      const firstError = Object.values(fieldErrors).flat()[0] || "Validation failed";
       return NextResponse.json(
         {
-          error: "Validation failed",
-          details: parseResult.error.flatten().fieldErrors,
+          error: firstError,
+          details: fieldErrors,
         },
         { status: 400 }
       );

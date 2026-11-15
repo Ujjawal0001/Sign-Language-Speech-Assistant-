@@ -244,7 +244,10 @@ export default function TeacherDashboard() {
 
       const data = await res.json();
       if (!res.ok) {
-        setModalError(data.error || "Failed to create classroom");
+        const firstFieldErr = data.details
+          ? Object.values(data.details).flat()[0]
+          : null;
+        setModalError(firstFieldErr || data.error || "Failed to create classroom");
         setIsSubmitting(false);
         return;
       }

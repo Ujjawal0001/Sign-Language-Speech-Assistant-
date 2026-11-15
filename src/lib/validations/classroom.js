@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createClassroomSchema = z.object({
   name: z
     .string()
-    .min(3, "Classroom name must be at least 3 characters")
+    .min(2, "Classroom name must be at least 2 characters")
     .max(80, "Classroom name cannot exceed 80 characters"),
   subject: z
     .string()
