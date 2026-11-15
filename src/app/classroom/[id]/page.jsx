@@ -12,6 +12,7 @@ import {
   Download,
   ArrowRight,
   CheckCircle2,
+  GripHorizontal,
 } from "lucide-react";
 
 import LiveHeader from "@/components/classroom/LiveHeader";
@@ -69,6 +70,75 @@ export default function LiveClassroomPage() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraStreamRef = useRef(null);
+
+  // Draggable & Movable Floating Camera Window State
+  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
+  useEffect(() => {
+    if (isCameraActive && typeof window !== "undefined") {
+      setCameraPosition((prev) => {
+        // If not positioned yet, dock in bottom right corner
+        if (prev.x === 0 && prev.y === 0) {
+          return {
+            x: Math.max(16, window.innerWidth - 310),
+            y: Math.max(80, window.innerHeight - 250),
+          };
+        }
+        return prev;
+      });
+    }
+  }, [isCameraActive]);
+
+  const handleCameraDragStart = (e) => {
+    if (e.type === "mousedown" && e.button !== 0) return;
+
+    isDraggingRef.current = true;
+    const clientX = e.type === "touchstart" ? e.touches[0].clientX : e.clientX;
+    const clientY = e.type === "touchstart" ? e.touches[0].clientY : e.clientY;
+
+    dragStartRef.current = {
+      startX: clientX,
+      startY: clientY,
+      initialX: cameraPosition.x,
+      initialY: cameraPosition.y,
+    };
+
+    const handleDragMove = (moveEvent) => {
+      if (!isDraggingRef.current) return;
+      const currentX = moveEvent.type === "touchmove" ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const currentY = moveEvent.type === "touchmove" ? moveEvent.touches[0].clientY : moveEvent.clientY;
+
+      const deltaX = currentX - dragStartRef.current.startX;
+      const deltaY = currentY - dragStartRef.current.startY;
+
+      const newX = dragStartRef.current.initialX + deltaX;
+      const newY = dragStartRef.current.initialY + deltaY;
+
+      // Keep inside visible window viewport bounds
+      const maxX = Math.max(0, window.innerWidth - 300);
+      const maxY = Math.max(0, window.innerHeight - 240);
+
+      const boundedX = Math.min(Math.max(10, newX), maxX);
+      const boundedY = Math.min(Math.max(10, newY), maxY);
+
+      setCameraPosition({ x: boundedX, y: boundedY });
+    };
+
+    const handleDragEnd = () => {
+      isDraggingRef.current = false;
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("touchend", handleDragEnd);
+    };
+
+    window.addEventListener("mousemove", handleDragMove);
+    window.addEventListener("mouseup", handleDragEnd);
+    window.addEventListener("touchmove", handleDragMove);
+    window.addEventListener("touchend", handleDragEnd);
+  };
 
   // Hydrate accessibility preferences from Student Dashboard & Instructor Settings
   useEffect(() => {
@@ -684,10 +754,54 @@ export default function LiveClassroomPage() {
         userRole={user?.role}
       />
 
-      {/* Camera Video & Hand Landmark Skeleton Overlay (When gesture camera is enabled) */}
+      {/* Movable & Draggable Camera Video with Hand Landmark Skeleton Overlay */}
       {isCameraActive && (
-        <div className="fixed bottom-6 right-6 z-40 w-72 h-56 bg-black rounded-2xl overflow-hidden shadow-float border-2 border-auralis-accent flex flex-col">
-          <div className="relative flex-1 w-full h-full">
+        <div
+          style={{
+            transform: `translate3d(${cameraPosition.x}px, ${cameraPosition.y}px, 0)`,
+            top: 0,
+            left: 0,
+          }}
+          className="fixed z-50 w-72 h-56 bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-auralis-accent flex flex-col select-none touch-none"
+        >
+          {/* Draggable Drag Header Bar */}
+          <div
+            onMouseDown={handleCameraDragStart}
+            onTouchStart={handleCameraDragStart}
+            className="absolute top-0 inset-x-0 h-9 z-20 bg-gradient-to-b from-black/90 via-black/60 to-transparent flex items-center justify-between px-2.5 cursor-grab active:cursor-grabbing text-white"
+            title="Click and drag to move camera window anywhere"
+          >
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/90 truncate pr-2 pointer-events-none">
+              <GripHorizontal className="w-3.5 h-3.5 text-auralis-secondary shrink-0" />
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  activeGesture?.isSign
+                    ? "bg-amber-400 animate-ping"
+                    : isGestureReady
+                    ? "bg-emerald-500 animate-pulse"
+                    : "bg-blue-400 animate-spin"
+                }`}
+              />
+              <span className="truncate font-semibold">
+                {isGestureLoading
+                  ? "Loading CV..."
+                  : activeGesture?.isSign
+                  ? `${activeGesture.label} (${Math.round(activeGesture.confidence * 100)}%)`
+                  : "ISL Camera (Movable)"}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleCamera}
+              className="p-1 rounded-lg bg-black/60 text-white hover:bg-red-600 transition-colors shrink-0"
+              title="Close Camera"
+            >
+              <VideoOff className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="relative flex-1 w-full h-full pt-2">
             <video
               ref={(el) => {
                 videoRef.current = el;
@@ -708,34 +822,6 @@ export default function LiveClassroomPage() {
               className="absolute inset-0 w-full h-full pointer-events-none transform -scale-x-100"
             />
           </div>
-
-          {/* Top Status & Live Gesture Detected Badge */}
-          <div className="absolute top-2 left-2 right-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-sm text-[10px] font-mono text-white border border-white/20 truncate">
-            <span
-              className={`w-2 h-2 rounded-full shrink-0 ${
-                activeGesture?.isSign
-                  ? "bg-amber-400 animate-ping"
-                  : isGestureReady
-                  ? "bg-emerald-500 animate-pulse"
-                  : "bg-blue-400 animate-spin"
-              }`}
-            />
-            <span className="truncate">
-              {isGestureLoading
-                ? "Loading CV Model..."
-                : activeGesture?.isSign
-                ? `${activeGesture.label} (${Math.round(activeGesture.confidence * 100)}%)`
-                : "Tracking Hand (ISL Active)"}
-            </span>
-          </div>
-
-          <button
-            onClick={toggleCamera}
-            className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 text-white hover:bg-black/90 text-xs border border-white/20"
-            title="Close Camera"
-          >
-            <VideoOff className="w-3.5 h-3.5" />
-          </button>
         </div>
       )}
 
