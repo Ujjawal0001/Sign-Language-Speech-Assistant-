@@ -37,10 +37,11 @@ function analyzeAndFormatSpeech(raw) {
 /**
  * useSpeechRecognition - Custom hook for speech-to-text with Web Speech API
  * - Real-time acoustic and phonetic speech analysis
+ * - Fresh-instance auto-restart resilience (fixes Chrome dead instance bug on onend/silence)
  * - Auto-commit silence debounce (guarantees spoken phrases become permanent caption blocks)
+ * - De-duplication guard against duplicate sentence commits
  * - Separate interim and finalized analyzed results
  * - Error handling for permissions, unsupported browsers, network
- * - Auto-restart resilience during active lecture sessions
  * - Web Audio API mic gain level meter (0-100)
  */
 export function useSpeechRecognition({
@@ -63,15 +64,17 @@ export function useSpeechRecognition({
   const mediaStreamRef = useRef(null);
   const animationFrameRef = useRef(null);
   const shouldKeepListeningRef = useRef(false);
+  const restartTimerRef = useRef(null);
 
   // Store latest callbacks in refs to avoid stale closures in event handlers
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const onInterimTranscriptRef = useRef(onInterimTranscript);
   const languageRef = useRef(language);
 
-  // Speech analysis & silence auto-commit refs
+  // Speech analysis, silence auto-commit and de-duplication refs
   const latestInterimRef = useRef("");
   const silenceTimerRef = useRef(null);
+  const lastCommittedTextRef = useRef("");
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript;
@@ -84,7 +87,11 @@ export function useSpeechRecognition({
   useEffect(() => {
     languageRef.current = language;
     if (recognitionRef.current) {
-      recognitionRef.current.lang = language;
+      try {
+        recognitionRef.current.lang = language;
+      } catch (e) {
+        // ignore
+      }
     }
   }, [language]);
 
@@ -95,19 +102,24 @@ export function useSpeechRecognition({
         window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         setIsSupported(false);
-        setError("Web Speech API is not supported in this browser. Please use Google Chrome or Microsoft Edge.");
+        setError(
+          "Web Speech API is not supported in this browser. Please use Google Chrome or Microsoft Edge."
+        );
       }
     }
   }, []);
 
-  // Web Audio Metering function
+  // Web Audio Metering function to give visual feedback that mic is picking up sound
   const startAudioMeter = useCallback(async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      if (mediaStreamRef.current) return; // already active
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
       const audioContext = new AudioCtx();
       audioContextRef.current = audioContext;
 
@@ -131,14 +143,14 @@ export function useSpeechRecognition({
         const average = sum / dataArray.length;
         const normalized = Math.min(100, Math.round((average / 128) * 100));
         setMicLevel(normalized);
-        setIsSpeaking(normalized > 14);
+        setIsSpeaking(normalized > 12);
 
         animationFrameRef.current = requestAnimationFrame(updateMeter);
       };
 
       updateMeter();
     } catch (err) {
-      console.warn("Audio meter setup warning:", err.message);
+      console.warn("Audio meter setup notice:", err.message);
     }
   }, []);
 
@@ -159,7 +171,7 @@ export function useSpeechRecognition({
     setIsSpeaking(false);
   }, []);
 
-  // Helper to commit analyzed interim speech into a permanent caption block
+  // Commit analyzed interim speech into a permanent caption block
   const commitInterimSegment = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -172,22 +184,49 @@ export function useSpeechRecognition({
 
     if (raw && raw.trim().length > 0) {
       const analyzed = analyzeAndFormatSpeech(raw);
-      const finalEntry = {
-        text: analyzed,
-        confidence: 0.95,
-        timestamp: new Date().toISOString(),
-        source: "SPEECH",
-      };
+      const cleanComparable = analyzed.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-      setFinalTranscripts((prev) => [...prev, finalEntry]);
-      if (onFinalTranscriptRef.current) {
-        onFinalTranscriptRef.current(finalEntry);
+      // Prevent committing the exact same sentence twice
+      if (cleanComparable && cleanComparable !== lastCommittedTextRef.current) {
+        lastCommittedTextRef.current = cleanComparable;
+
+        const finalEntry = {
+          text: analyzed,
+          confidence: 0.95,
+          timestamp: new Date().toISOString(),
+          source: "SPEECH",
+        };
+
+        setFinalTranscripts((prev) => [...prev, finalEntry]);
+        if (onFinalTranscriptRef.current) {
+          onFinalTranscriptRef.current(finalEntry);
+        }
       }
     }
   }, []);
 
-  // Initialize SpeechRecognition instance
-  const initRecognition = useCallback(() => {
+  // Safely destroy the current recognition instance
+  const destroyCurrentRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      const r = recognitionRef.current;
+      recognitionRef.current = null;
+      r.onstart = null;
+      r.onresult = null;
+      r.onerror = null;
+      r.onend = null;
+      try {
+        r.abort();
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, []);
+
+  // Forward declare restart helper
+  const restartRecognitionSessionRef = useRef(null);
+
+  // Create a brand new SpeechRecognition instance (essential for Chrome's continuous session lifecycle)
+  const createRecognitionInstance = useCallback(() => {
     if (typeof window === "undefined") return null;
 
     const SpeechRecognition =
@@ -210,10 +249,9 @@ export function useSpeechRecognition({
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        const transcriptText = result[0].transcript;
+        const transcriptText = result[0]?.transcript || "";
 
         if (result.isFinal) {
-          // Cancel any pending silence commit timer
           if (silenceTimerRef.current) {
             clearTimeout(silenceTimerRef.current);
             silenceTimerRef.current = null;
@@ -223,15 +261,22 @@ export function useSpeechRecognition({
           const trimmed = transcriptText.trim();
           if (trimmed.length > 0) {
             const analyzed = analyzeAndFormatSpeech(trimmed);
-            const finalEntry = {
-              text: analyzed,
-              confidence: result[0].confidence || 0.95,
-              timestamp: new Date().toISOString(),
-              source: "SPEECH",
-            };
-            setFinalTranscripts((prev) => [...prev, finalEntry]);
-            if (onFinalTranscriptRef.current) {
-              onFinalTranscriptRef.current(finalEntry);
+            const cleanComparable = analyzed.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+            if (cleanComparable && cleanComparable !== lastCommittedTextRef.current) {
+              lastCommittedTextRef.current = cleanComparable;
+
+              const finalEntry = {
+                text: analyzed,
+                confidence: result[0]?.confidence || 0.95,
+                timestamp: new Date().toISOString(),
+                source: "SPEECH",
+              };
+
+              setFinalTranscripts((prev) => [...prev, finalEntry]);
+              if (onFinalTranscriptRef.current) {
+                onFinalTranscriptRef.current(finalEntry);
+              }
             }
           }
         } else {
@@ -245,52 +290,56 @@ export function useSpeechRecognition({
         onInterimTranscriptRef.current(interim);
       }
 
-      // If words are being analyzed, debounce a silence auto-commit (1.8s)
-      // so if speaker pauses, it automatically writes it into the caption block
+      // Silence auto-commit debounce: if user speaks and pauses for 1.4s,
+      // commit it as a permanent caption block so words are immediately captured!
       if (interim.trim().length > 0) {
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
         silenceTimerRef.current = setTimeout(() => {
           commitInterimSegment();
-        }, 1800);
+        }, 1400);
       }
     };
 
     recognition.onerror = (event) => {
-      console.warn("Speech Recognition Event:", event.error);
+      console.warn("[SpeechRecognition] event error:", event.error);
       if (event.error === "not-allowed") {
-        setError("Microphone access was denied. Please allow microphone permissions in your browser settings.");
+        setError(
+          "Microphone access was denied. Please allow microphone permissions in your browser address bar."
+        );
         shouldKeepListeningRef.current = false;
         setIsListening(false);
         isListeningRef.current = false;
+        destroyCurrentRecognition();
         stopAudioMeter();
       } else if (event.error === "network") {
-        setError("Network connectivity issue interrupted speech recognition. Re-establishing connection...");
+        setError("Network connectivity issue interrupted speech recognition. Re-establishing...");
       } else if (event.error === "no-speech") {
-        // Normal quiet period; onend will automatically restart cleanly
+        // Normal quiet period in Chrome; onend will automatically cycle cleanly
+      } else if (event.error === "aborted") {
+        // Normal when user stops or instance is recycled
       } else {
         setError(`Speech recognition notice: ${event.error}`);
       }
     };
 
     recognition.onend = () => {
-      // If there was any pending speech in interim buffer, commit it immediately
+      // Commit any lingering interim speech before instance closes
       if (latestInterimRef.current && latestInterimRef.current.trim().length > 0) {
         commitInterimSegment();
       }
 
-      // Auto-restart if we should still be listening (e.g. Chrome 60s silence timeout)
+      destroyCurrentRecognition();
+
+      // If we should keep listening, spawn a fresh instance (fixes Chrome dead instance bug)
       if (shouldKeepListeningRef.current) {
-        setTimeout(() => {
-          if (shouldKeepListeningRef.current && recognitionRef.current) {
-            try {
-              recognitionRef.current.start();
-            } catch (err) {
-              // Ignore if already starting
-            }
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          if (shouldKeepListeningRef.current && restartRecognitionSessionRef.current) {
+            restartRecognitionSessionRef.current();
           }
-        }, 150);
+        }, 100);
       } else {
         setIsListening(false);
         isListeningRef.current = false;
@@ -300,7 +349,32 @@ export function useSpeechRecognition({
     };
 
     return recognition;
-  }, [commitInterimSegment, stopAudioMeter]);
+  }, [commitInterimSegment, destroyCurrentRecognition, stopAudioMeter]);
+
+  // Restart handler that always creates a FRESH SpeechRecognition object
+  const startNewSession = useCallback(() => {
+    if (!shouldKeepListeningRef.current) return;
+    destroyCurrentRecognition();
+
+    try {
+      const freshRecognition = createRecognitionInstance();
+      if (!freshRecognition) return;
+      recognitionRef.current = freshRecognition;
+      freshRecognition.start();
+    } catch (err) {
+      console.warn("[SpeechRecognition] Start exception, retrying:", err.message);
+      if (shouldKeepListeningRef.current) {
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          startNewSession();
+        }, 300);
+      }
+    }
+  }, [createRecognitionInstance, destroyCurrentRecognition]);
+
+  useEffect(() => {
+    restartRecognitionSessionRef.current = startNewSession;
+  }, [startNewSession]);
 
   const startListening = useCallback(async () => {
     if (!isSupported) {
@@ -312,32 +386,23 @@ export function useSpeechRecognition({
       setError(null);
       shouldKeepListeningRef.current = true;
 
-      if (!recognitionRef.current) {
-        recognitionRef.current = initRecognition();
-      }
+      // Ensure audio meter is active for real-time waveform
+      startAudioMeter().catch(() => {});
 
-      if (recognitionRef.current) {
-        recognitionRef.current.lang = languageRef.current || language;
-        try {
-          recognitionRef.current.start();
-        } catch (startErr) {
-          if (!startErr.message || !startErr.message.includes("already started")) {
-            console.warn("Speech start exception:", startErr);
-          }
-        }
-      }
-
-      await startAudioMeter();
+      // Launch fresh recognition session
+      startNewSession();
     } catch (err) {
       console.warn("Failed to start speech recognition:", err);
-      if (err.message && !err.message.includes("already started")) {
-        setError(err.message || "Failed to start speech recognition");
-      }
+      setError(err.message || "Failed to start speech recognition");
     }
-  }, [isSupported, language, initRecognition, startAudioMeter]);
+  }, [isSupported, startAudioMeter, startNewSession]);
 
   const stopListening = useCallback(() => {
     shouldKeepListeningRef.current = false;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -346,23 +411,19 @@ export function useSpeechRecognition({
     if (latestInterimRef.current && latestInterimRef.current.trim().length > 0) {
       commitInterimSegment();
     }
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // ignore
-      }
-    }
+
+    destroyCurrentRecognition();
     setIsListening(false);
     isListeningRef.current = false;
     setInterimText("");
     stopAudioMeter();
-  }, [commitInterimSegment, stopAudioMeter]);
+  }, [commitInterimSegment, destroyCurrentRecognition, stopAudioMeter]);
 
   const resetTranscripts = useCallback(() => {
     setFinalTranscripts([]);
     setInterimText("");
     latestInterimRef.current = "";
+    lastCommittedTextRef.current = "";
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
@@ -373,19 +434,12 @@ export function useSpeechRecognition({
   useEffect(() => {
     return () => {
       shouldKeepListeningRef.current = false;
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          // ignore
-        }
-      }
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      destroyCurrentRecognition();
       stopAudioMeter();
     };
-  }, [stopAudioMeter]);
+  }, [destroyCurrentRecognition, stopAudioMeter]);
 
   return {
     isListening,

@@ -668,6 +668,12 @@ export default function LiveClassroomPage() {
 
   // Teacher Action: Start Live Lecture
   const handleStartLecture = async () => {
+    // 1. Immediately activate speech recognition synchronously within click gesture
+    startListening().catch(() => {});
+    if (!isCameraActive) {
+      startCamera().catch(() => {});
+    }
+
     try {
       setIsActionLoading(true);
 
@@ -692,12 +698,6 @@ export default function LiveClassroomPage() {
       setLectureStatus("LIVE");
       setTranscripts([]);
       updateLectureStatus("LIVE");
-
-      // Auto start speech recognition & sign gesture camera
-      await startListening();
-      if (!isCameraActive) {
-        startCamera().catch(() => {});
-      }
     } catch (err) {
       console.error("Start lecture error:", err);
       alert("Error starting lecture session");
@@ -1050,6 +1050,8 @@ export default function LiveClassroomPage() {
             isCameraActive={isCameraActive}
             onToggleCamera={toggleCamera}
             onOpenPollModal={() => setIsPollModalOpen(true)}
+            micLevel={micLevel}
+            isSpeaking={isSpeaking}
           />
         ) : (
           <StudentControls
@@ -1079,6 +1081,8 @@ export default function LiveClassroomPage() {
               lectureStatus={lectureStatus}
               isTeacher={isTeacher}
               onStartSpeech={handlePauseResumeRecognition}
+              micLevel={micLevel}
+              isSpeaking={isSpeaking}
             />
 
             {/* Teacher Fast Announcement / Caption Block Creator */}

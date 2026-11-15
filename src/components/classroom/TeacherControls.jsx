@@ -34,6 +34,8 @@ export default function TeacherControls({
   isCameraActive = false,
   onToggleCamera = null,
   onOpenPollModal = null,
+  micLevel = 0,
+  isSpeaking = false,
 }) {
   const [showEndModal, setShowEndModal] = useState(false);
 
@@ -208,23 +210,46 @@ export default function TeacherControls({
                     : "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 ring-2 ring-emerald-400/30"
                   : isHighContrast
                   ? "bg-white/10 text-white/70 border-white/20 hover:bg-white/20"
-                  : "bg-auralis-bg text-auralis-muted border-auralis-border hover:bg-auralis-surface hover:text-auralis-text"
+                  : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 ring-2 ring-amber-400/20"
               }`}
             >
               {isListening ? (
-                <>
-                  <Mic className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                <div className="flex items-center gap-1.5">
+                  <Mic className={`w-3.5 h-3.5 text-emerald-600 ${isSpeaking ? "animate-bounce scale-110" : "animate-pulse"}`} />
                   <span>MIC ON</span>
-                </>
+                  {/* Real-time mini audio level meter */}
+                  <div className="flex items-end gap-0.5 h-3 w-4 ml-0.5" title={`Audio input level: ${micLevel}%`}>
+                    <span style={{ height: `${Math.max(25, Math.min(100, micLevel * 1.4))}%` }} className="w-1 bg-emerald-500 rounded-full transition-all duration-75" />
+                    <span style={{ height: `${Math.max(20, Math.min(100, micLevel * 1.8))}%` }} className="w-1 bg-emerald-500 rounded-full transition-all duration-75" />
+                    <span style={{ height: `${Math.max(30, Math.min(100, micLevel * 1.2))}%` }} className="w-1 bg-emerald-500 rounded-full transition-all duration-75" />
+                  </div>
+                </div>
               ) : (
                 <>
-                  <MicOff className="w-3.5 h-3.5" />
+                  <MicOff className="w-3.5 h-3.5 text-amber-600" />
                   <span>MIC MUTED</span>
                 </>
               )}
             </button>
           </div>
         </div>
+
+        {/* Prominent Banner when Lecture is LIVE but Mic is Muted */}
+        {lectureStatus === "LIVE" && !isListening && (
+          <div className="mt-3.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <span>Microphone is currently MUTED. Spoken words will not appear in the caption block until speech recognition is resumed.</span>
+            </div>
+            <button
+              type="button"
+              onClick={onPauseResumeRecognition}
+              className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shrink-0 shadow-sm transition-all"
+            >
+              Resume Speech Recognition
+            </button>
+          </div>
+        )}
 
         {/* Speech Error Banner if microphone was denied or network failed */}
         {speechError && (
