@@ -41,11 +41,20 @@ try {
 // 3. Push Database Schema if DATABASE_URL is provided
 if (dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))) {
   console.log("[Render Build] Synchronizing database tables with PostgreSQL...");
-  try {
-    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
-    console.log("[Render Build] Database tables synchronized successfully.");
-  } catch (err) {
-    console.warn("[Render Build] Warning during prisma db push:", err.message);
+  let synced = false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+      console.log("[Render Build] Database tables synchronized successfully on attempt " + attempt + ".");
+      synced = true;
+      break;
+    } catch (err) {
+      console.warn(`[Render Build] Attempt ${attempt} to sync database tables failed: ${err.message}`);
+      if (attempt < 3) {
+        console.log("[Render Build] Retrying database connection in 3 seconds...");
+        execSync("node -e \"setTimeout(() => {}, 3000)\"");
+      }
+    }
   }
 }
 
