@@ -38,7 +38,7 @@ try {
   process.exit(1);
 }
 
-// 3. Push Database Schema if DATABASE_URL is provided
+// 3. Push Database Schema
 if (dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))) {
   console.log("[Render Build] Synchronizing database tables with PostgreSQL...");
   let synced = false;
@@ -55,6 +55,14 @@ if (dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://
         execSync("node -e \"setTimeout(() => {}, 3000)\"");
       }
     }
+  }
+} else {
+  console.log("[Render Build] Preparing SQLite database tables...");
+  try {
+    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+    console.log("[Render Build] SQLite tables initialized successfully.");
+  } catch (err) {
+    console.warn("[Render Build] SQLite sync note:", err.message);
   }
 }
 

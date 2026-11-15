@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "concurrently -k -r \"next dev\" \"node server/socket-server.js\"",
     "dev:next": "next dev",
-    "build": "prisma generate && next build",
+    "build": "node scripts/render-build.js",
     "build:render": "node scripts/render-build.js",
     "start": "node server.js",
     "start:standalone": "next start",
