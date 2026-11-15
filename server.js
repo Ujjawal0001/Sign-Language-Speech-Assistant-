@@ -1,12 +1,19 @@
 // server.js - Unified Production Server for Render
 // Serves Next.js frontend + APIs + Socket.IO on the same HTTP port (process.env.PORT)
 
+// Sanitize runtime environment variables on cloud hosts
+process.env.NODE_ENV = "production";
+if (process.env.DATABASE_URL && (process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("127.0.0.1"))) {
+  console.warn("[Server] Unsetting unreachable localhost DATABASE_URL in cloud environment. Falling back to SQLite.");
+  delete process.env.DATABASE_URL;
+}
+
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
 const { Server } = require("socket.io");
 
-const dev = process.env.NODE_ENV !== "production";
+const dev = false;
 const hostname = "0.0.0.0";
 const port = parseInt(process.env.PORT || "3000", 10);
 
