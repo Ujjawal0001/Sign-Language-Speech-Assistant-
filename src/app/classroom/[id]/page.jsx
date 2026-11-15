@@ -1239,7 +1239,13 @@ export default function LiveClassroomPage() {
       {/* In-Class Live Poll Modal (Teacher & Student) */}
       <LivePollModal
         isOpen={isPollModalOpen}
-        onClose={() => setIsPollModalOpen(false)}
+        onClose={() => {
+          setIsPollModalOpen(false);
+          if (activePoll?.isEnded) {
+            setActivePoll(null);
+            setUserVotedOptionIndex(null);
+          }
+        }}
         isTeacher={isTeacher}
         activePoll={activePoll}
         onLaunchPoll={handleTeacherLaunchPoll}

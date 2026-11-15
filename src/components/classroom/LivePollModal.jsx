@@ -29,7 +29,7 @@ export default function LivePollModal({
   const [options, setOptions] = useState(["Option A", "Option B"]);
   const [pollPreset, setPollPreset] = useState("custom");
 
-  if (!isOpen && !activePoll) return null;
+  if (!isOpen) return null;
 
   const presets = [
     {
@@ -94,7 +94,12 @@ export default function LivePollModal({
     const totalVotes = (activePoll.votes || []).reduce((acc, v) => acc + (v.count || 0), 0);
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onClose) onClose();
+        }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      >
         <div
           className={`w-full max-w-lg rounded-3xl p-6 border shadow-2xl transition-all ${
             isHighContrast
@@ -119,9 +124,10 @@ export default function LivePollModal({
             </div>
             {onClose && (
               <button
+                type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-colors"
-                title="Dismiss modal (poll continues in background)"
+                className="p-1.5 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 text-inherit transition-colors cursor-pointer"
+                title="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -213,19 +219,30 @@ export default function LivePollModal({
             </span>
 
             {isTeacher && !activePoll.isEnded ? (
-              <button
-                onClick={() => onEndPoll(activePoll.id)}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-tactile"
-              >
-                <Square className="w-3.5 h-3.5 fill-white" />
-                <span>End Poll & Broadcast</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3.5 py-2 rounded-xl border border-inherit text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  Minimize
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onEndPoll(activePoll.id)}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-tactile cursor-pointer"
+                >
+                  <Square className="w-3.5 h-3.5 fill-white" />
+                  <span>End Poll &amp; Broadcast</span>
+                </button>
+              </div>
             ) : (
               <button
+                type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-auralis-accent text-white font-bold"
+                className="px-5 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-bold transition-all shadow-tactile cursor-pointer"
               >
-                Done
+                Done / Close
               </button>
             )}
           </div>
@@ -238,7 +255,12 @@ export default function LivePollModal({
   if (!isTeacher) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+    >
       <div
         className={`w-full max-w-md rounded-3xl p-6 border shadow-2xl transition-all ${
           isHighContrast
