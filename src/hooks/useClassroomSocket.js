@@ -21,7 +21,11 @@ export function useClassroomSocket({
   useEffect(() => {
     if (!activeRoomId) return;
 
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+    const socketUrl =
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+        ? window.location.origin
+        : "http://localhost:3001");
     console.log(`[useClassroomSocket] Connecting to ${socketUrl} for room: ${activeRoomId}`);
 
     const socket = io(socketUrl, {
