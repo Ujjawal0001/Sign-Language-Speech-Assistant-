@@ -2,7 +2,17 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Loader2, AlertCircle, Video, VideoOff } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  Video,
+  VideoOff,
+  GraduationCap,
+  Clock,
+  Download,
+  ArrowRight,
+  CheckCircle2,
+} from "lucide-react";
 
 import LiveHeader from "@/components/classroom/LiveHeader";
 import CaptionView from "@/components/classroom/CaptionView";
@@ -37,6 +47,12 @@ export default function LiveClassroomPage() {
   const [activeSign, setActiveSign] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [manualCaption, setManualCaption] = useState("");
+
+  // Class Concluded & Student Auto-Close State
+  const [isClassConcluded, setIsClassConcluded] = useState(false);
+  const [autoRedirectCountdown, setAutoRedirectCountdown] = useState(5);
+
+  const isTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
 
   const currentLectureRef = useRef(null);
   useEffect(() => {
@@ -178,13 +194,68 @@ export default function LiveClassroomPage() {
     }, 4000);
   }, []);
 
-  const handleSocketLectureStatusChange = useCallback(({ status, lectureId }) => {
-    if (status) setLectureStatus(status);
-    if (lectureId) {
-      setCurrentLecture((prev) => (prev?.id === lectureId ? prev : { id: lectureId, status }));
-      currentLectureRef.current = { id: lectureId, status };
+  const handleSocketLectureStatusChange = useCallback(
+    ({ status, lectureId }) => {
+      if (status) {
+        setLectureStatus(status);
+        if (status === "COMPLETED") {
+          const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
+          if (!isCurrentTeacher) {
+            setIsClassConcluded(true);
+            stopCamera();
+          }
+        }
+      }
+      if (lectureId) {
+        setCurrentLecture((prev) => (prev?.id === lectureId ? prev : { id: lectureId, status }));
+        currentLectureRef.current = { id: lectureId, status };
+      }
+    },
+    [user?.role, classroom?.teacherId, urlRole]
+  );
+
+  // Auto-redirect countdown when class is concluded for student
+  useEffect(() => {
+    let timer = null;
+    if (isClassConcluded) {
+      if (autoRedirectCountdown > 0) {
+        timer = setTimeout(() => {
+          setAutoRedirectCountdown((prev) => prev - 1);
+        }, 1000);
+      } else {
+        router.push("/student/dashboard");
+      }
     }
-  }, []);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isClassConcluded, autoRedirectCountdown, router]);
+
+  // Download transcript summary helper
+  const handleDownloadTranscript = () => {
+    if (transcripts.length === 0) return;
+
+    let content = `AURALIS LECTURE TRANSCRIPT\n`;
+    content += `Classroom: ${classroom?.name || "Classroom"}\n`;
+    content += `Generated: ${new Date().toLocaleString()}\n`;
+    content += `Total Entries: ${transcripts.length}\n`;
+    content += `====================================================\n\n`;
+
+    transcripts.forEach((t) => {
+      const time = t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : "";
+      const source = t.source === "SIGN_LANGUAGE" ? "[SIGN]" : "[SPEECH]";
+      const speaker = t.speaker?.name ? `${t.speaker.name}: ` : "";
+      content += `[${time}] ${source} ${speaker}${t.text}\n\n`;
+    });
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Auralis-${classroom?.name || "Lecture"}-Transcript-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Initialize Socket connection
   const {
@@ -484,25 +555,27 @@ export default function LiveClassroomPage() {
 
   // Teacher Action: Conclude Lecture
   const handleEndLecture = async () => {
-    if (!currentLecture?.id) return;
+    setIsActionLoading(true);
+    stopListening();
+    if (isCameraActive) {
+      stopCamera();
+    }
+
+    const activeLec = currentLectureRef.current || currentLecture;
     try {
-      setIsActionLoading(true);
-      stopListening();
-
-      const res = await fetch(`/api/lectures/${currentLecture.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "COMPLETED" }),
-      });
-
-      if (res.ok) {
-        setLectureStatus("COMPLETED");
-        updateLectureStatus("COMPLETED");
+      if (activeLec?.id) {
+        await fetch(`/api/lectures/${activeLec.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "COMPLETED" }),
+        });
       }
     } catch (err) {
-      console.error("Failed to conclude lecture:", err);
+      console.warn("Failed to patch lecture status:", err);
     } finally {
       setIsActionLoading(false);
+      setLectureStatus("COMPLETED");
+      updateLectureStatus("COMPLETED");
     }
   };
 
@@ -551,8 +624,6 @@ export default function LiveClassroomPage() {
         t.text.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : transcripts;
-
-  const isTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id;
 
   if (isLoading) {
     return (
@@ -759,6 +830,61 @@ export default function LiveClassroomPage() {
           />
         </div>
       </div>
+
+      {/* CLASS CONCLUDED OVERLAY FOR STUDENTS */}
+      {isClassConcluded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-auralis-border shadow-2xl p-6 sm:p-8 text-center space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-800 mx-auto flex items-center justify-center shadow-inner">
+              <GraduationCap className="w-9 h-9 text-auralis-accent" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-auralis-accent bg-auralis-highlight px-3 py-1 rounded-full border border-auralis-secondary/50">
+                Live Session Concluded
+              </span>
+              <h2 className="font-heading font-extrabold text-2xl text-auralis-text">
+                Class Concluded by Instructor
+              </h2>
+              <p className="text-xs text-auralis-muted max-w-sm mx-auto leading-relaxed">
+                Your instructor has concluded today&apos;s live lecture. All real-time captions and transcripts have been safely archived to your dashboard.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-auralis-bg border border-auralis-border flex items-center justify-between text-xs">
+              <span className="text-auralis-muted">Captions recorded:</span>
+              <span className="font-mono font-bold text-auralis-text">{transcripts.length} entries</span>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <div className="text-xs font-semibold text-auralis-muted flex items-center justify-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-auralis-accent animate-spin" />
+                <span>Redirecting to Student Dashboard in <span className="font-bold text-auralis-accent font-mono text-sm">{autoRedirectCountdown}</span>s...</span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleDownloadTranscript}
+                  className="w-full py-2.5 px-4 rounded-xl border border-auralis-border text-xs font-bold text-auralis-text hover:bg-auralis-bg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-auralis-accent" />
+                  <span>Download Transcript</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/student/dashboard")}
+                  className="w-full py-2.5 px-4 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Close &amp; Return Now</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

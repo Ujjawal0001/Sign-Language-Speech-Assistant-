@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Play,
   Square,
@@ -14,6 +15,8 @@ import {
   Video,
   VideoOff,
   Hand,
+  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
 
 export default function TeacherControls({
@@ -73,6 +76,16 @@ export default function TeacherControls({
                   <Mic className="w-4 h-4 text-auralis-accent" />
                   <span>{isListening ? "Mic Analysis Active" : "Enable Microphone Analysis"}</span>
                 </button>
+
+                {lectureStatus === "COMPLETED" && (
+                  <Link
+                    href="/teacher/dashboard"
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs bg-auralis-dark text-white hover:bg-black transition-colors shadow-tactile"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Return to Dashboard</span>
+                  </Link>
+                )}
               </div>
             ) : (
               <>
