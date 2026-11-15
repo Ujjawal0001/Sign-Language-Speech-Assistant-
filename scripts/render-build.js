@@ -5,15 +5,27 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
+// Force strict production environment to prevent Next.js non-standard NODE_ENV hydration conflicts
+process.env.NODE_ENV = "production";
+
 console.log("\n====================================================");
 console.log("  AURALIS RENDER BUILD & DEPLOYMENT SCRIPT");
 console.log("====================================================\n");
 
-const dbUrl = process.env.DATABASE_URL || "";
+let dbUrl = (process.env.DATABASE_URL || "").trim();
+const isLocalhostDb = dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1");
+const isPostgres = (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) && !isLocalhostDb;
+
+if (isLocalhostDb) {
+  console.warn("\n[Render Build] ⚠️  NOTICE: DATABASE_URL is configured as a localhost address ('localhost' or '127.0.0.1').");
+  console.warn("[Render Build] PostgreSQL does not run on localhost inside Render cloud containers.");
+  console.warn("[Render Build] Automatically using SQLite fallback ('dev.db') so your deployment succeeds seamlessly.");
+  console.warn("[Render Build] To connect PostgreSQL on Render: Create a Render PostgreSQL database and paste its external/internal URL into DATABASE_URL.\n");
+}
 
 // 1. Detect Database Provider
-if (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) {
-  console.log("[Render Build] PostgreSQL detected in DATABASE_URL.");
+if (isPostgres) {
+  console.log("[Render Build] Valid remote PostgreSQL detected in DATABASE_URL.");
   console.log("[Render Build] Applying PostgreSQL schema (prisma/schema.postgresql.prisma)...");
   
   const postgresSchema = fs.readFileSync(
@@ -26,25 +38,38 @@ if (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) {
     "utf-8"
   );
 } else {
-  console.log("[Render Build] No external PostgreSQL found; using default schema.");
+  console.log("[Render Build] Using SQLite schema (prisma/schema.prisma)...");
+  // Ensure default SQLite schema is active
+  const sqliteSchemaPath = path.join(__dirname, "..", "prisma", "schema.prisma");
+  let currentSchema = fs.readFileSync(sqliteSchemaPath, "utf-8");
+  if (!currentSchema.includes('provider = "sqlite"')) {
+    currentSchema = currentSchema.replace(/provider\s*=\s*"postgresql"/g, 'provider = "sqlite"');
+    currentSchema = currentSchema.replace(/url\s*=\s*env\("DATABASE_URL"\)/g, 'url      = "file:./dev.db"');
+    fs.writeFileSync(sqliteSchemaPath, currentSchema, "utf-8");
+  }
 }
+
+const buildEnv = {
+  ...process.env,
+  NODE_ENV: "production",
+};
 
 // 2. Generate Prisma Client
 console.log("[Render Build] Generating Prisma Client...");
 try {
-  execSync("npx prisma generate", { stdio: "inherit" });
+  execSync("npx prisma generate", { stdio: "inherit", env: buildEnv });
 } catch (err) {
   console.error("[Render Build] Failed to generate Prisma client:", err.message);
   process.exit(1);
 }
 
 // 3. Push Database Schema
-if (dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))) {
-  console.log("[Render Build] Synchronizing database tables with PostgreSQL...");
+if (isPostgres) {
+  console.log("[Render Build] Synchronizing database tables with remote PostgreSQL...");
   let synced = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+      execSync("npx prisma db push --accept-data-loss", { stdio: "inherit", env: buildEnv });
       console.log("[Render Build] Database tables synchronized successfully on attempt " + attempt + ".");
       synced = true;
       break;
@@ -59,7 +84,7 @@ if (dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://
 } else {
   console.log("[Render Build] Preparing SQLite database tables...");
   try {
-    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit", env: buildEnv });
     console.log("[Render Build] SQLite tables initialized successfully.");
   } catch (err) {
     console.warn("[Render Build] SQLite sync note:", err.message);
@@ -69,7 +94,7 @@ if (dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://
 // 4. Build Next.js Production Bundle
 console.log("\n[Render Build] Compiling Next.js production build...");
 try {
-  execSync("npx next build", { stdio: "inherit" });
+  execSync("npx next build", { stdio: "inherit", env: buildEnv });
 } catch (err) {
   console.error("[Render Build] Next.js build failed:", err.message);
   process.exit(1);
