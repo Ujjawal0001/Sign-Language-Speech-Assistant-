@@ -318,7 +318,11 @@ export default function TeacherDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-auralis-bg">
+    <div
+      className={`min-h-screen flex flex-col md:flex-row transition-colors ${
+        isHighContrast ? "bg-[#0A100F] text-white" : "bg-auralis-bg text-auralis-text"
+      }`}
+    >
       <aside className="w-full md:w-64 bg-white border-r border-auralis-border flex flex-col justify-between shrink-0">
         <div>
           <div className="p-6 border-b border-auralis-border">

@@ -51,13 +51,51 @@ select {
   color: #172521;
 }
 
+/* Form and container theme adjustments */
+.high-contrast .bg-white,
+.dark .bg-white {
+  background-color: var(--surface) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.high-contrast aside,
+.dark aside {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+.high-contrast header,
+.dark header {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+.high-contrast .shadow-tactile,
+.dark .shadow-tactile,
+.high-contrast .shadow-float,
+.dark .shadow-float {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important;
+}
+
 .high-contrast input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .high-contrast textarea,
 .high-contrast select,
 .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .dark textarea,
 .dark select {
-  color: #FFFFFF;
+  color: #FFFFFF !important;
+  background-color: #162622 !important;
+  border-color: var(--border) !important;
+}
+
+.high-contrast input::placeholder,
+.high-contrast textarea::placeholder,
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgba(255, 255, 255, 0.45) !important;
 }
 
 /* Strict Accessibility: Clear, non-intrusive focus rings */
