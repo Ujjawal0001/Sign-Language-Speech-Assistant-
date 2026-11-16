@@ -77,7 +77,7 @@ export default function LiveClassroomPage() {
   // Accessibility & UX State
   const [fontSize, setFontSize] = useState("large"); // standard | large | xlarge
   const [isHighContrast, setIsHighContrast] = useState(false);
-  const [speechLanguage, setSpeechLanguage] = useState("en-IN");
+  const [speechLanguage, setSpeechLanguage] = useState("en-US");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
 

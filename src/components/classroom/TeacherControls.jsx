@@ -193,16 +193,15 @@ export default function TeacherControls({
               <select
                 value={language}
                 onChange={(e) => setLanguage && setLanguage(e.target.value)}
-                disabled={isListening}
-                className={`py-2 px-3 rounded-xl text-xs font-semibold outline-none transition-colors border ${
+                className={`py-2 px-3 rounded-xl text-xs font-semibold outline-none transition-colors border cursor-pointer ${
                   isHighContrast
                     ? "bg-[#142B29] border-white/20 text-white"
                     : "bg-auralis-bg border-auralis-border text-auralis-text"
                 }`}
-                title={isListening ? "Pause recognition to switch language" : "Select Speech Recognition Language"}
+                title="Select Speech Recognition Accent / Language (e.g. English US or English India)"
               >
+                <option value="en-US">English (US / Global)</option>
                 <option value="en-IN">English (India)</option>
-                <option value="en-US">English (US)</option>
                 <option value="en-GB">English (UK)</option>
                 <option value="hi-IN">Hindi (हिंदी)</option>
               </select>
