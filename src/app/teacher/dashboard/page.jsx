@@ -32,6 +32,8 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 export default function TeacherDashboard() {
@@ -142,11 +144,22 @@ export default function TeacherDashboard() {
   const [gestureThreshold, setGestureThreshold] = useState(80);
   const [autoArchive, setAutoArchive] = useState(true);
   const [allowStudentGestures, setAllowStudentGestures] = useState(true);
+  const [isHighContrast, setIsHighContrast] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
   // Load saved instructor preferences on mount
   useEffect(() => {
     try {
+      const savedTheme = localStorage.getItem("auralis_theme");
+      const isDark =
+        savedTheme === "dark" ||
+        document.documentElement.classList.contains("dark") ||
+        document.documentElement.classList.contains("high-contrast");
+      if (isDark) {
+        setIsHighContrast(true);
+        document.documentElement.classList.add("high-contrast", "dark");
+      }
+
       const saved = localStorage.getItem("auralis_instructor_settings");
       if (saved) {
         const pref = JSON.parse(saved);
@@ -154,12 +167,35 @@ export default function TeacherDashboard() {
         if (pref.gestureThreshold) setGestureThreshold(pref.gestureThreshold);
         if (typeof pref.autoArchive === "boolean") setAutoArchive(pref.autoArchive);
         if (typeof pref.allowStudentGestures === "boolean") setAllowStudentGestures(pref.allowStudentGestures);
+        if (typeof pref.isHighContrast === "boolean") {
+          setIsHighContrast(pref.isHighContrast);
+          if (pref.isHighContrast) {
+            document.documentElement.classList.add("high-contrast", "dark");
+          }
+        }
       }
     } catch (e) {
       // ignore
     }
     fetchSessionAndClassrooms();
   }, []);
+
+  const toggleContrast = () => {
+    const next = !isHighContrast;
+    setIsHighContrast(next);
+    if (next) {
+      document.documentElement.classList.add("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "dark");
+      } catch (e) {}
+    } else {
+      document.documentElement.classList.remove("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "light");
+      } catch (e) {}
+    }
+    saveSettings({ isHighContrast: next });
+  };
 
   const saveSettings = (updates = {}) => {
     const updated = {
@@ -410,13 +446,34 @@ export default function TeacherDashboard() {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-2.5 px-5 py-3.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm transition-all shadow-tactile hover:shadow shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-auralis-accent"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create New Classroom</span>
-                </button>
+                <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
+                  <button
+                    type="button"
+                    onClick={toggleContrast}
+                    className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-auralis-border bg-white text-xs font-bold text-auralis-text hover:bg-auralis-bg transition-colors shadow-tactile cursor-pointer"
+                    title="Toggle Night Mode / High Contrast"
+                  >
+                    {isHighContrast ? (
+                      <>
+                        <Sun className="w-4 h-4 text-auralis-warning" />
+                        <span>Standard Theme</span>
+                      </>
+                    ) : (
+                      <>
+                        <Moon className="w-4 h-4 text-auralis-accent" />
+                        <span>Night Mode</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="inline-flex items-center gap-2.5 px-5 py-3.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm transition-all shadow-tactile hover:shadow shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-auralis-accent cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create New Classroom</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">

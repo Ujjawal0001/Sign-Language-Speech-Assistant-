@@ -10,6 +10,22 @@ export function Navbar() {
   const [highContrast, setHighContrast] = useState(false);
 
   useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem("auralis_theme");
+      const isDark =
+        savedTheme === "dark" ||
+        document.documentElement.classList.contains("dark") ||
+        document.documentElement.classList.contains("high-contrast");
+      if (isDark) {
+        setHighContrast(true);
+        document.documentElement.classList.add("high-contrast", "dark");
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
     };
@@ -21,9 +37,15 @@ export function Navbar() {
     const nextState = !highContrast;
     setHighContrast(nextState);
     if (nextState) {
-      document.documentElement.classList.add("high-contrast");
+      document.documentElement.classList.add("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "dark");
+      } catch (e) {}
     } else {
-      document.documentElement.classList.remove("high-contrast");
+      document.documentElement.classList.remove("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "light");
+      } catch (e) {}
     }
   };
 
@@ -95,19 +117,19 @@ export function Navbar() {
             {/* High Contrast Accessibility Quick-Toggle */}
             <button
               onClick={toggleHighContrast}
-              className="p-2.5 rounded-lg border border-auralis-border text-auralis-text hover:bg-auralis-surface hover:border-auralis-muted transition-colors flex items-center gap-2 text-xs font-semibold"
-              title="Toggle High Contrast Mode (WCAG 2.2 AA)"
-              aria-label="Toggle High Contrast Mode"
+              className="p-2.5 rounded-lg border border-auralis-border text-auralis-text hover:bg-auralis-surface hover:border-auralis-muted transition-colors flex items-center gap-2 text-xs font-semibold cursor-pointer"
+              title="Toggle Night Mode / High Contrast"
+              aria-label="Toggle Night Mode"
             >
               {highContrast ? (
                 <>
                   <Sun className="w-4 h-4 text-auralis-warning" />
-                  <span>Standard Contrast</span>
+                  <span>Standard</span>
                 </>
               ) : (
                 <>
                   <Moon className="w-4 h-4 text-auralis-accent" />
-                  <span>High Contrast</span>
+                  <span>Night Mode</span>
                 </>
               )}
             </button>

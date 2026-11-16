@@ -30,6 +30,8 @@ import {
   RotateCcw,
   Check,
   Quote,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 export default function LectureTranscriptViewPage() {
@@ -62,6 +64,38 @@ export default function LectureTranscriptViewPage() {
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [exportNotice, setExportNotice] = useState(null);
+
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem("auralis_theme");
+      const isDark =
+        savedTheme === "dark" ||
+        document.documentElement.classList.contains("dark") ||
+        document.documentElement.classList.contains("high-contrast");
+      if (isDark) {
+        setIsHighContrast(true);
+        document.documentElement.classList.add("high-contrast", "dark");
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const toggleContrast = () => {
+    const next = !isHighContrast;
+    setIsHighContrast(next);
+    if (next) {
+      document.documentElement.classList.add("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "dark");
+      } catch (e) {}
+    } else {
+      document.documentElement.classList.remove("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "light");
+      } catch (e) {}
+    }
+  };
 
   // Load AI Summary on demand or initial load
   const loadSummaryData = async () => {
@@ -371,17 +405,17 @@ export default function LectureTranscriptViewPage() {
               </button>
             </div>
 
-            {/* High Contrast */}
+            {/* High Contrast / Night Mode */}
             <button
-              onClick={() => setIsHighContrast(!isHighContrast)}
-              className={`p-2 rounded-xl transition-all border ${
+              onClick={toggleContrast}
+              className={`p-2 rounded-xl transition-all border cursor-pointer ${
                 isHighContrast
                   ? "bg-[#FFE27A] text-black border-white font-bold"
                   : "bg-auralis-bg hover:bg-auralis-surface text-auralis-text border-auralis-border"
               }`}
-              title="Toggle OLED Contrast"
+              title={isHighContrast ? "Switch to Standard Theme" : "Switch to Night / High-Contrast Mode"}
             >
-              <Contrast className="w-4 h-4" />
+              {isHighContrast ? <Sun className="w-4 h-4 text-black" /> : <Moon className="w-4 h-4 text-auralis-accent" />}
             </button>
 
             {/* Print */}

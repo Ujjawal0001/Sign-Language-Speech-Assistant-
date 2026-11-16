@@ -19,8 +19,9 @@
   --warning: #D99A37;
 }
 
-/* High Contrast Mode for Deaf/Hard-of-Hearing with low vision */
-.high-contrast {
+/* High Contrast & Night Mode for low vision, photophobia and dark environments */
+.high-contrast,
+.dark {
   --background: #0A100F;
   --foreground: #FFFFFF;
   --surface: #111C19;
@@ -48,6 +49,15 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 textarea,
 select {
   color: #172521;
+}
+
+.high-contrast input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.high-contrast textarea,
+.high-contrast select,
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.dark textarea,
+.dark select {
+  color: #FFFFFF;
 }
 
 /* Strict Accessibility: Clear, non-intrusive focus rings */

@@ -17,6 +17,8 @@ import {
   Filter,
   Loader2,
   FileText,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 export default function LectureHistoryPage() {
@@ -26,6 +28,39 @@ export default function LectureHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | LIVE | COMPLETED
+  const [isHighContrast, setIsHighContrast] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem("auralis_theme");
+      const isDark =
+        savedTheme === "dark" ||
+        document.documentElement.classList.contains("dark") ||
+        document.documentElement.classList.contains("high-contrast");
+      if (isDark) {
+        setIsHighContrast(true);
+        document.documentElement.classList.add("high-contrast", "dark");
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const toggleContrast = () => {
+    const next = !isHighContrast;
+    setIsHighContrast(next);
+    if (next) {
+      document.documentElement.classList.add("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "dark");
+      } catch (e) {}
+    } else {
+      document.documentElement.classList.remove("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "light");
+      } catch (e) {}
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -105,21 +140,39 @@ export default function LectureHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-auralis-bg text-auralis-text flex flex-col">
+    <div
+      className={`min-h-screen flex flex-col transition-colors ${
+        isHighContrast ? "bg-[#0B0F0E] text-white" : "bg-auralis-bg text-auralis-text"
+      }`}
+    >
       {/* Top Header */}
-      <header className="bg-white border-b border-auralis-border sticky top-0 z-30 shadow-sm">
+      <header
+        className={`border-b sticky top-0 z-30 shadow-sm transition-colors ${
+          isHighContrast ? "bg-[#111C19] border-white/20 text-white" : "bg-white border-auralis-border"
+        }`}
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link
               href={dashboardHref}
-              className="p-2 rounded-xl bg-auralis-bg hover:bg-auralis-surface text-auralis-muted hover:text-auralis-text border border-auralis-border transition-colors"
+              className={`p-2 rounded-xl transition-colors border ${
+                isHighContrast
+                  ? "bg-white/10 text-white border-white/20 hover:bg-white/20"
+                  : "bg-auralis-bg hover:bg-auralis-surface text-auralis-muted hover:text-auralis-text border-auralis-border"
+              }`}
               title="Return to Dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
 
             <div>
-              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-auralis-accent bg-auralis-highlight px-2 py-0.5 rounded border border-auralis-secondary/40">
+              <span
+                className={`text-[11px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                  isHighContrast
+                    ? "bg-[#FFE27A] text-black border-white"
+                    : "text-auralis-accent bg-auralis-highlight border-auralis-secondary/40"
+                }`}
+              >
                 Accessible Transcripts
               </span>
               <h1 className="font-heading font-extrabold text-xl sm:text-2xl tracking-tight mt-0.5">
@@ -128,12 +181,40 @@ export default function LectureHistoryPage() {
             </div>
           </div>
 
-          <Link
-            href={dashboardHref}
-            className="hidden sm:inline-flex items-center gap-2 text-xs font-bold text-auralis-muted hover:text-auralis-text px-3 py-2 rounded-xl border border-auralis-border hover:bg-auralis-surface transition-colors"
-          >
-            <span>Back to Dashboard</span>
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleContrast}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
+                isHighContrast
+                  ? "bg-[#FFE27A] text-black border-white"
+                  : "border-auralis-border text-auralis-text bg-white hover:bg-auralis-bg"
+              }`}
+              title="Toggle Night Mode / High Contrast"
+            >
+              {isHighContrast ? (
+                <>
+                  <Sun className="w-4 h-4 text-black" />
+                  <span>Standard</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-auralis-accent" />
+                  <span>Night Mode</span>
+                </>
+              )}
+            </button>
+
+            <Link
+              href={dashboardHref}
+              className={`hidden sm:inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border transition-colors ${
+                isHighContrast
+                  ? "border-white/20 text-white hover:bg-white/10"
+                  : "border-auralis-border text-auralis-muted hover:text-auralis-text hover:bg-auralis-surface"
+              }`}
+            >
+              <span>Back to Dashboard</span>
+            </Link>
+          </div>
         </div>
       </header>
 

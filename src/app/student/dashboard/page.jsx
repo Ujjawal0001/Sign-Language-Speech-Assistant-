@@ -125,21 +125,26 @@ export default function StudentDashboard() {
   // Load saved accessibility preferences on mount
   useEffect(() => {
     try {
+      const savedTheme = localStorage.getItem("auralis_theme");
       const saved = localStorage.getItem("auralis_student_accessibility");
+      let shouldDark = savedTheme === "dark";
+
       if (saved) {
         const pref = JSON.parse(saved);
         if (pref.fontSize) setFontSize(pref.fontSize);
         if (typeof pref.isHighContrast === "boolean") {
-          setIsHighContrast(pref.isHighContrast);
-          if (pref.isHighContrast) {
-            document.documentElement.classList.add("high-contrast");
-          } else {
-            document.documentElement.classList.remove("high-contrast");
-          }
+          if (pref.isHighContrast) shouldDark = true;
         }
         if (pref.skeletonMode) setSkeletonMode(pref.skeletonMode);
         if (typeof pref.showAudioWave === "boolean") setShowAudioWave(pref.showAudioWave);
         if (typeof pref.gestureAlert === "boolean") setGestureAlert(pref.gestureAlert);
+      }
+
+      setIsHighContrast(shouldDark);
+      if (shouldDark) {
+        document.documentElement.classList.add("high-contrast", "dark");
+      } else {
+        document.documentElement.classList.remove("high-contrast", "dark");
       }
     } catch (e) {
       // ignore
@@ -179,9 +184,15 @@ export default function StudentDashboard() {
     const next = !isHighContrast;
     setIsHighContrast(next);
     if (next) {
-      document.documentElement.classList.add("high-contrast");
+      document.documentElement.classList.add("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "dark");
+      } catch (e) {}
     } else {
-      document.documentElement.classList.remove("high-contrast");
+      document.documentElement.classList.remove("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "light");
+      } catch (e) {}
     }
     saveAccessibilityPreferences({ isHighContrast: next });
   };

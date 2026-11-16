@@ -154,21 +154,49 @@ export default function LiveClassroomPage() {
     window.addEventListener("touchend", handleDragEnd);
   };
 
+  // Toggle Contrast / Night Mode handler
+  const handleToggleContrast = () => {
+    const next = !isHighContrast;
+    setIsHighContrast(next);
+    if (next) {
+      document.documentElement.classList.add("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "dark");
+      } catch (e) {}
+    } else {
+      document.documentElement.classList.remove("high-contrast", "dark");
+      try {
+        localStorage.setItem("auralis_theme", "light");
+      } catch (e) {}
+    }
+    try {
+      const saved = localStorage.getItem("auralis_student_accessibility");
+      const pref = saved ? JSON.parse(saved) : {};
+      pref.isHighContrast = next;
+      localStorage.setItem("auralis_student_accessibility", JSON.stringify(pref));
+    } catch (e) {}
+  };
+
   // Hydrate accessibility preferences from Student Dashboard & Instructor Settings
   useEffect(() => {
     try {
+      const savedTheme = localStorage.getItem("auralis_theme");
+      let shouldDark = savedTheme === "dark";
+
       const saved = localStorage.getItem("auralis_student_accessibility");
       if (saved) {
         const pref = JSON.parse(saved);
         if (pref.fontSize) setFontSize(pref.fontSize);
         if (typeof pref.isHighContrast === "boolean") {
-          setIsHighContrast(pref.isHighContrast);
-          if (pref.isHighContrast) {
-            document.documentElement.classList.add("high-contrast");
-          } else {
-            document.documentElement.classList.remove("high-contrast");
-          }
+          if (pref.isHighContrast) shouldDark = true;
         }
+      }
+
+      setIsHighContrast(shouldDark);
+      if (shouldDark) {
+        document.documentElement.classList.add("high-contrast", "dark");
+      } else {
+        document.documentElement.classList.remove("high-contrast", "dark");
       }
     } catch (e) {
       // ignore
@@ -977,7 +1005,7 @@ export default function LiveClassroomPage() {
         duration={duration}
         participantCount={participantCount}
         isHighContrast={isHighContrast}
-        toggleHighContrast={() => setIsHighContrast(!isHighContrast)}
+        toggleHighContrast={handleToggleContrast}
         fontSize={fontSize}
         setFontSize={setFontSize}
         userRole={user?.role}
@@ -1080,7 +1108,7 @@ export default function LiveClassroomPage() {
             fontSize={fontSize}
             setFontSize={setFontSize}
             isHighContrast={isHighContrast}
-            toggleHighContrast={() => setIsHighContrast(!isHighContrast)}
+            toggleHighContrast={handleToggleContrast}
             isCameraActive={isCameraActive}
             onToggleCamera={toggleCamera}
             onOpenDoubtModal={() => setIsDoubtModalOpen(true)}
