@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Mic,
   Hand,
@@ -9,6 +10,9 @@ import {
   ArrowDown,
   Layers,
   CheckCircle2,
+  Plus,
+  Clock,
+  GraduationCap,
 } from "lucide-react";
 
 export default function CaptionView({
@@ -21,6 +25,7 @@ export default function CaptionView({
   lectureStatus = "SCHEDULED",
   isTeacher = false,
   onStartSpeech = null,
+  onOpenCreateLectureModal = null,
   micLevel = 0,
   isSpeaking = false,
 }) {
@@ -158,7 +163,9 @@ export default function CaptionView({
                   isHighContrast ? "text-white" : "text-auralis-text"
                 }`}
               >
-                {lectureStatus === "LIVE"
+                {lectureStatus === "COMPLETED"
+                  ? "Lecture Concluded"
+                  : lectureStatus === "LIVE"
                   ? "Awaiting Speech or Sign Gestures"
                   : "Lecture Ready to Begin"}
               </h2>
@@ -167,13 +174,35 @@ export default function CaptionView({
                   isHighContrast ? "text-white/70" : "text-auralis-muted"
                 }`}
               >
-                {lectureStatus === "LIVE"
+                {lectureStatus === "COMPLETED"
+                  ? "This lecture has concluded and cannot be restarted. All captions are preserved. To start a new session, create a new lecture."
+                  : lectureStatus === "LIVE"
                   ? "Captions will populate here in real-time as the instructor speaks or as sign language is detected."
                   : "When the instructor initiates the lecture, verified speech captions and sign translations will stream continuously here."}
               </p>
             </div>
 
-            {isListening ? (
+            {lectureStatus === "COMPLETED" ? (
+              <div className="flex items-center gap-3 flex-wrap justify-center pt-2">
+                {isTeacher && onOpenCreateLectureModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenCreateLectureModal}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-heading font-bold shadow-tactile transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create New Lecture</span>
+                  </button>
+                )}
+                <Link
+                  href="/lectures"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-auralis-dark hover:bg-black text-white text-xs font-heading font-bold shadow-tactile transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  <span>View in Lecture History</span>
+                </Link>
+              </div>
+            ) : isListening ? (
               <div
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono font-semibold ${
                   isHighContrast
@@ -197,8 +226,37 @@ export default function CaptionView({
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Teacher Mic Status & Real-time Level Feedback */}
-            {isTeacher && !isListening && (
+            {/* Concluded Lecture Banner (Permanent status indicator) */}
+            {lectureStatus === "COMPLETED" && (
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2.5 font-semibold">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>This lecture has concluded and cannot be restarted. All captions are preserved and accessible in lecture history.</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  {isTeacher && onOpenCreateLectureModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenCreateLectureModal}
+                      className="px-3.5 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-bold text-xs shadow-tactile transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create New Lecture</span>
+                    </button>
+                  )}
+                  <Link
+                    href="/lectures"
+                    className="px-3.5 py-2 rounded-xl bg-auralis-dark hover:bg-black text-white font-bold text-xs shadow-tactile transition-all flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Lecture History</span>
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Teacher Mic Status & Real-time Level Feedback (Only when lecture is NOT concluded) */}
+            {lectureStatus !== "COMPLETED" && isTeacher && !isListening && (
               <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
                 <div className="flex items-center gap-2 font-semibold">
                   <Mic className="w-4 h-4 text-amber-600 shrink-0" />
@@ -216,7 +274,7 @@ export default function CaptionView({
               </div>
             )}
 
-            {isTeacher && isListening && (
+            {lectureStatus !== "COMPLETED" && isTeacher && isListening && (
               <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] font-mono flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />

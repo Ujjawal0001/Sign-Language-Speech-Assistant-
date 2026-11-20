@@ -40,6 +40,13 @@ export async function POST(req) {
       return NextResponse.json({ error: "Lecture not found" }, { status: 404 });
     }
 
+    if (lecture.status === "COMPLETED") {
+      return NextResponse.json(
+        { error: "This lecture has concluded. New captions cannot be appended to a concluded session." },
+        { status: 400 }
+      );
+    }
+
     // Check membership / teacher status
     const isTeacher = lecture.classroom.teacherId === user.id;
     const isAdmin = user.role === "ADMIN";

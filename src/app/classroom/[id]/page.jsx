@@ -334,6 +334,17 @@ export default function LiveClassroomPage() {
   const handleSocketLectureStatusChange = useCallback(
     ({ status, lectureId }) => {
       if (status) {
+        const activeLecId = currentLectureRef.current?.id;
+        // Strictly prevent restarting an already concluded lecture for both user and instructor
+        if (
+          currentLectureRef.current?.status === "COMPLETED" &&
+          (status === "LIVE" || status === "PAUSED") &&
+          (!lectureId || lectureId === activeLecId)
+        ) {
+          console.warn("[Socket] Ignored restart attempt on concluded lecture:", activeLecId);
+          return;
+        }
+
         setLectureStatus(status);
         if (status === "LIVE") {
           setIsClassConcluded(false);
@@ -348,11 +359,11 @@ export default function LiveClassroomPage() {
         }
       }
       if (lectureId) {
-        setCurrentLecture((prev) => (prev?.id === lectureId ? prev : { id: lectureId, status }));
+        setCurrentLecture((prev) => (prev?.id === lectureId ? { ...prev, status } : { id: lectureId, status }));
         currentLectureRef.current = { id: lectureId, status };
       }
     },
-    [user?.role, classroom?.teacherId, urlRole]
+    [user?.role, classroom?.teacherId, urlRole, stopCamera]
   );
 
   // Student Doubt Socket Listeners
@@ -726,7 +737,11 @@ export default function LiveClassroomPage() {
 
   // Teacher Action: Start Live Lecture
   const handleStartLecture = async () => {
-    // If modal is not open, open modal to let teacher name the lecture or start immediately
+    if (!isTeacher) return;
+    if (lectureStatus === "COMPLETED") {
+      setIsCreateLectureModalOpen(true);
+      return;
+    }
     handleCreateNewLecture();
   };
 
@@ -766,8 +781,8 @@ export default function LiveClassroomPage() {
       setIsCreateLectureModalOpen(false);
       setNewLectureTitle("");
 
-      // Notify socket room that a new lecture session has started
-      updateLectureStatus("LIVE");
+      // Notify socket room that a new lecture session has started with this fresh lecture ID
+      updateLectureStatus("LIVE", data.lecture.id);
 
       // Activate speech recognition & camera
       startListening().catch(() => {});
@@ -784,6 +799,12 @@ export default function LiveClassroomPage() {
 
   // Teacher Action: Pause / Resume Speech Recognition
   const handlePauseResumeRecognition = () => {
+    if (!isTeacher) return;
+    // Strictly prevent restarting an already concluded lecture!
+    if (lectureStatus === "COMPLETED") {
+      setIsCreateLectureModalOpen(true);
+      return;
+    }
     if (isListening) {
       stopListening();
       setLectureStatus("PAUSED");
@@ -865,6 +886,7 @@ export default function LiveClassroomPage() {
   // Teacher Action: Manually type and broadcast a verified caption block
   const handleManualCaptionSubmit = (e) => {
     e.preventDefault();
+    if (!isTeacher || lectureStatus === "COMPLETED") return;
     if (!manualCaption.trim()) return;
 
     const text = manualCaption.trim();
@@ -1183,6 +1205,8 @@ export default function LiveClassroomPage() {
             isDoubtPending={isDoubtPending}
             activePoll={activePoll}
             onOpenPollModal={() => setIsPollModalOpen(true)}
+            lectureStatus={lectureStatus}
+            currentLectureId={currentLecture?.id}
           />
         )}
 
@@ -1199,12 +1223,13 @@ export default function LiveClassroomPage() {
               lectureStatus={lectureStatus}
               isTeacher={isTeacher}
               onStartSpeech={handlePauseResumeRecognition}
+              onOpenCreateLectureModal={() => setIsCreateLectureModalOpen(true)}
               micLevel={micLevel}
               isSpeaking={isSpeaking}
             />
 
             {/* Teacher Fast Announcement / Caption Block Creator */}
-            {isTeacher && (
+            {isTeacher && lectureStatus !== "COMPLETED" && (
               <form
                 onSubmit={handleManualCaptionSubmit}
                 className={`shrink-0 flex items-center gap-2 p-2 rounded-2xl border transition-colors shadow-tactile ${

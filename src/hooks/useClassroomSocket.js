@@ -245,10 +245,10 @@ export function useClassroomSocket({
   );
 
   const updateLectureStatus = useCallback(
-    (status) => {
+    (status, customLectureId = null) => {
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit("lecture-status-change", {
-          lectureId: activeRoomId,
+          lectureId: customLectureId || activeRoomId,
           classroomId,
           status,
         });
