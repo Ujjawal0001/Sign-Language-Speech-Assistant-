@@ -107,7 +107,7 @@ export default function TeacherControls({
 
                 <button
                   type="button"
-                  onClick={onPauseResumeRecognition}
+                  onClick={onOpenCreateLectureModal || onPauseResumeRecognition}
                   disabled={isActionLoading}
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs border transition-all ${
                     isListening

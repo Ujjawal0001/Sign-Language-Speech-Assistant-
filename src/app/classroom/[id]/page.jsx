@@ -163,6 +163,73 @@ export default function LiveClassroomPage() {
     window.addEventListener("touchend", handleDragEnd);
   };
 
+  // Stop Camera Feed safely
+  const stopCamera = useCallback(() => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  }, []);
+
+  // Start Camera Feed safely
+  const startCamera = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Camera is not supported on this device/browser.");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "user" },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setIsCameraActive(true);
+
+      // Attach stream to video DOM element
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch((e) => console.warn("Video play exception:", e));
+        }
+      });
+    } catch (err) {
+      console.warn("Camera start exception:", err);
+      alert("Camera access was not granted or camera is occupied by another app: " + err.message);
+    }
+  }, []);
+
+  // Toggle Camera Feed (for Sign Gesture capture)
+  const toggleCamera = useCallback(() => {
+    if (isCameraActive) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+  }, [isCameraActive, stopCamera, startCamera]);
+
+  // Ensure stream stays attached whenever video element is rendered or re-mounted
+  useEffect(() => {
+    if (isCameraActive && cameraStreamRef.current && videoRef.current) {
+      if (videoRef.current.srcObject !== cameraStreamRef.current) {
+        videoRef.current.srcObject = cameraStreamRef.current;
+        videoRef.current.play().catch(() => {});
+      }
+    }
+  }, [isCameraActive]);
+
+  // Clean camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
   // Toggle Contrast / Night Mode handler
   const handleToggleContrast = () => {
     const next = !isHighContrast;
@@ -668,83 +735,6 @@ export default function LiveClassroomPage() {
     enabled: isCameraActive,
   });
 
-  // Start Camera Feed safely
-  const startCamera = async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("Camera is not supported on this device/browser.");
-        return;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" },
-        audio: false,
-      });
-      cameraStreamRef.current = stream;
-      setIsCameraActive(true);
-
-      // Attach stream to video DOM element
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch((e) => console.warn("Video play exception:", e));
-        }
-      });
-    } catch (err) {
-      console.warn("Camera start exception:", err);
-      alert("Camera access was not granted or camera is occupied by another app: " + err.message);
-    }
-  };
-
-  // Stop Camera Feed safely
-  const stopCamera = () => {
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraActive(false);
-  };
-
-  // Toggle Camera Feed (for Sign Gesture capture)
-  const toggleCamera = () => {
-    if (isCameraActive) {
-      stopCamera();
-    } else {
-      startCamera();
-    }
-  };
-
-  // Ensure stream stays attached whenever video element is rendered or re-mounted
-  useEffect(() => {
-    if (isCameraActive && cameraStreamRef.current && videoRef.current) {
-      if (videoRef.current.srcObject !== cameraStreamRef.current) {
-        videoRef.current.srcObject = cameraStreamRef.current;
-        videoRef.current.play().catch(() => {});
-      }
-    }
-  }, [isCameraActive]);
-
-  // Clean camera stream on unmount
-  useEffect(() => {
-    return () => {
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, []);
-
-  // Teacher Action: Start Live Lecture
-  const handleStartLecture = async () => {
-    if (!isTeacher) return;
-    if (lectureStatus === "COMPLETED") {
-      setIsCreateLectureModalOpen(true);
-      return;
-    }
-    handleCreateNewLecture();
-  };
-
   // Teacher Action: Create a Brand New Lecture for this Classroom Only
   const handleCreateNewLecture = async (e) => {
     if (e) e.preventDefault();
@@ -797,11 +787,21 @@ export default function LiveClassroomPage() {
     }
   };
 
+  // Teacher Action: Start Live Lecture
+  const handleStartLecture = async () => {
+    if (!isTeacher) return;
+    if (lectureStatus === "COMPLETED") {
+      setIsCreateLectureModalOpen(true);
+      return;
+    }
+    handleCreateNewLecture();
+  };
+
   // Teacher Action: Pause / Resume Speech Recognition
   const handlePauseResumeRecognition = () => {
     if (!isTeacher) return;
-    // Strictly prevent restarting an already concluded lecture!
-    if (lectureStatus === "COMPLETED") {
+    // Strictly prevent starting/resuming if lecture is concluded, scheduled, or not created yet
+    if (lectureStatus === "COMPLETED" || lectureStatus === "SCHEDULED" || !currentLectureRef.current) {
       setIsCreateLectureModalOpen(true);
       return;
     }
