@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   ArrowRight,
   BarChart3,
+  Plus,
+  GraduationCap,
 } from "lucide-react";
 
 export default function TeacherControls({
@@ -29,6 +31,7 @@ export default function TeacherControls({
   onStartLecture,
   onPauseResumeRecognition,
   onEndLecture,
+  onOpenCreateLectureModal = null,
   speechError = null,
   isActionLoading = false,
   isCameraActive = false,
@@ -51,10 +54,46 @@ export default function TeacherControls({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           {/* Left: Primary Lecture Workflow Buttons */}
           <div className="flex items-center gap-3 flex-wrap">
-            {lectureStatus !== "LIVE" && lectureStatus !== "PAUSED" ? (
+            {lectureStatus === "COMPLETED" ? (
+              /* Concluded Session: Cannot restart same lecture. Only create new lecture or view history */
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-mono font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Lecture Concluded</span>
+                </div>
+
+                {onOpenCreateLectureModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenCreateLectureModal}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-xs shadow-tactile transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create New Lecture</span>
+                  </button>
+                )}
+
+                <Link
+                  href="/lectures"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-bold text-xs bg-auralis-highlight hover:bg-auralis-surface text-auralis-accent border border-auralis-secondary/60 transition-colors shadow-tactile"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-auralis-accent" />
+                  <span>View in Lecture History</span>
+                </Link>
+
+                <Link
+                  href="/teacher/dashboard"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-heading font-bold text-xs bg-auralis-dark text-white hover:bg-black transition-colors shadow-tactile"
+                >
+                  <GraduationCap className="w-3.5 h-3.5 text-white" />
+                  <span>Dashboard</span>
+                </Link>
+              </div>
+            ) : lectureStatus !== "LIVE" && lectureStatus !== "PAUSED" ? (
+              /* Not Started Yet (SCHEDULED): Option to start live lecture */
               <div className="flex items-center gap-2.5 flex-wrap">
                 <button
-                  onClick={onStartLecture}
+                  onClick={onOpenCreateLectureModal || onStartLecture}
                   disabled={isActionLoading}
                   className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-heading font-bold text-sm shadow-tactile hover:shadow transition-all disabled:opacity-50"
                 >
@@ -80,25 +119,6 @@ export default function TeacherControls({
                   <Mic className="w-4 h-4 text-auralis-accent" />
                   <span>{isListening ? "Mic Analysis Active" : "Enable Microphone Analysis"}</span>
                 </button>
-
-                {lectureStatus === "COMPLETED" && (
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href="/lectures"
-                      className="flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs bg-auralis-accent text-white hover:bg-auralis-accent-hover transition-colors shadow-tactile"
-                    >
-                      <Sparkles className="w-4 h-4 text-white" />
-                      <span>View in Lecture History</span>
-                    </Link>
-                    <Link
-                      href="/teacher/dashboard"
-                      className="flex items-center gap-2 px-4 py-3 rounded-xl font-heading font-bold text-xs bg-auralis-dark text-white hover:bg-black transition-colors shadow-tactile"
-                    >
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>Return to Dashboard</span>
-                    </Link>
-                  </div>
-                )}
               </div>
             ) : (
               <>

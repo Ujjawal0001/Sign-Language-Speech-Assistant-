@@ -107,6 +107,14 @@ export async function PATCH(req, { params }) {
     const body = await req.json();
     const { status, title, transcripts = [] } = body;
 
+    // Concluded lectures cannot be restarted!
+    if (lecture.status === "COMPLETED" && (status === "LIVE" || status === "SCHEDULED" || status === "PAUSED")) {
+      return NextResponse.json(
+        { error: "This lecture has already concluded and cannot be restarted. Please create a new lecture for this classroom." },
+        { status: 400 }
+      );
+    }
+
     const updateData = {};
     if (title) updateData.title = title.trim();
     if (status) {

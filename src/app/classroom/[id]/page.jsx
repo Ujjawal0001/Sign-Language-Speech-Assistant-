@@ -13,6 +13,10 @@ import {
   ArrowRight,
   CheckCircle2,
   GripHorizontal,
+  Plus,
+  X,
+  Play,
+  Sparkles,
 } from "lucide-react";
 
 import LiveHeader from "@/components/classroom/LiveHeader";
@@ -55,6 +59,11 @@ export default function LiveClassroomPage() {
   // Class Concluded & Student Auto-Close State
   const [isClassConcluded, setIsClassConcluded] = useState(false);
   const [autoRedirectCountdown, setAutoRedirectCountdown] = useState(5);
+
+  // Create New Lecture Modal State (Teacher)
+  const [isCreateLectureModalOpen, setIsCreateLectureModalOpen] = useState(false);
+  const [newLectureTitle, setNewLectureTitle] = useState("");
+  const [isCreatingLecture, setIsCreatingLecture] = useState(false);
 
   // Live In-Class Interactive Polls State
   const [isPollModalOpen, setIsPollModalOpen] = useState(false);
@@ -244,17 +253,33 @@ export default function LiveClassroomPage() {
         const lecRes = await fetch(`/api/lectures?classroomId=${classroomId}`);
         if (lecRes.ok) {
           const lecData = await lecRes.json();
-          const active = lecData.lectures?.find((l) => l.status === "LIVE" || l.status === "SCHEDULED");
+          const active = lecData.lectures?.find((l) => l.status === "LIVE" || l.status === "PAUSED");
           if (active) {
             setCurrentLecture(active);
             currentLectureRef.current = active;
             setLectureStatus(active.status);
 
-            // Hydrate past transcripts for this lecture
+            // Hydrate past transcripts for this active lecture
             const trRes = await fetch(`/api/lectures/${active.id}/transcripts`);
             if (trRes.ok) {
               const trData = await trRes.json();
               setTranscripts(trData.transcripts || []);
+            }
+          } else {
+            // Check if there is a recently concluded lecture in this classroom
+            const completed = lecData.lectures?.find((l) => l.status === "COMPLETED");
+            if (completed) {
+              setCurrentLecture(completed);
+              currentLectureRef.current = completed;
+              setLectureStatus("COMPLETED");
+
+              const trRes = await fetch(`/api/lectures/${completed.id}/transcripts`);
+              if (trRes.ok) {
+                const trData = await trRes.json();
+                setTranscripts(trData.transcripts || []);
+              }
+            } else {
+              setLectureStatus("SCHEDULED");
             }
           }
         }
@@ -310,7 +335,11 @@ export default function LiveClassroomPage() {
     ({ status, lectureId }) => {
       if (status) {
         setLectureStatus(status);
-        if (status === "COMPLETED") {
+        if (status === "LIVE") {
+          setIsClassConcluded(false);
+          setTranscripts([]);
+          setDuration(0);
+        } else if (status === "COMPLETED") {
           const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
           if (!isCurrentTeacher) {
             setIsClassConcluded(true);
@@ -697,41 +726,59 @@ export default function LiveClassroomPage() {
 
   // Teacher Action: Start Live Lecture
   const handleStartLecture = async () => {
-    // 1. Immediately activate speech recognition synchronously within click gesture
-    startListening().catch(() => {});
-    if (!isCameraActive) {
-      startCamera().catch(() => {});
-    }
+    // If modal is not open, open modal to let teacher name the lecture or start immediately
+    handleCreateNewLecture();
+  };
+
+  // Teacher Action: Create a Brand New Lecture for this Classroom Only
+  const handleCreateNewLecture = async (e) => {
+    if (e) e.preventDefault();
+    setIsCreatingLecture(true);
 
     try {
-      setIsActionLoading(true);
+      const defaultTitle = `${classroom?.subject || classroom?.name || "Lecture"} – ${new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`;
+      const titleToUse = newLectureTitle.trim() || defaultTitle;
 
       const res = await fetch("/api/lectures", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classroomId,
-          title: `${classroom?.name} Live Session`,
+          title: titleToUse,
+          status: "LIVE",
+          transcripts: [],
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Failed to start lecture");
-        setIsActionLoading(false);
+        alert(data.error || "Failed to create new lecture");
+        setIsCreatingLecture(false);
         return;
       }
 
       setCurrentLecture(data.lecture);
       currentLectureRef.current = data.lecture;
-      setLectureStatus("LIVE");
       setTranscripts([]);
+      setDuration(0);
+      setLectureStatus("LIVE");
+      setIsClassConcluded(false);
+      setIsCreateLectureModalOpen(false);
+      setNewLectureTitle("");
+
+      // Notify socket room that a new lecture session has started
       updateLectureStatus("LIVE");
+
+      // Activate speech recognition & camera
+      startListening().catch(() => {});
+      if (!isCameraActive) {
+        startCamera().catch(() => {});
+      }
     } catch (err) {
-      console.error("Start lecture error:", err);
-      alert("Error starting lecture session");
+      console.error("Create new lecture error:", err);
+      alert("Error starting new lecture session");
     } finally {
-      setIsActionLoading(false);
+      setIsCreatingLecture(false);
     }
   };
 
@@ -1115,8 +1162,9 @@ export default function LiveClassroomPage() {
             onStartLecture={handleStartLecture}
             onPauseResumeRecognition={handlePauseResumeRecognition}
             onEndLecture={handleEndLecture}
+            onOpenCreateLectureModal={() => setIsCreateLectureModalOpen(true)}
             speechError={speechError}
-            isActionLoading={isActionLoading}
+            isActionLoading={isActionLoading || isCreatingLecture}
             isCameraActive={isCameraActive}
             onToggleCamera={toggleCamera}
             onOpenPollModal={() => setIsPollModalOpen(true)}
@@ -1313,6 +1361,101 @@ export default function LiveClassroomPage() {
           isCameraActive={isCameraActive}
           isHighContrast={isHighContrast}
         />
+      )}
+
+      {/* Teacher Create New Lecture Modal (Exclusive to this Classroom) */}
+      {isTeacher && isCreateLectureModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div
+            className={`w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border transition-colors ${
+              isHighContrast
+                ? "bg-[#111C19] border-white/20 text-white"
+                : "bg-white border-auralis-border text-auralis-text"
+            }`}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-inherit">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-auralis-accent text-white flex items-center justify-center shadow-tactile">
+                  <Play className="w-5 h-5 fill-white" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-extrabold text-lg">
+                    Create New Lecture
+                  </h3>
+                  <p className="text-xs text-auralis-muted">
+                    This lecture will be created in this classroom only.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateLectureModalOpen(false)}
+                className="p-2 rounded-xl text-auralis-muted hover:text-auralis-text hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewLecture} className="mt-6 space-y-5">
+              <div className="p-3.5 rounded-2xl bg-auralis-bg dark:bg-white/5 border border-auralis-border dark:border-white/10 space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-auralis-muted">
+                  Target Classroom (Locked)
+                </span>
+                <div className="font-heading font-bold text-sm text-auralis-text dark:text-white flex items-center justify-between">
+                  <span>{classroom?.name}</span>
+                  <span className="text-xs font-mono font-semibold text-auralis-accent bg-auralis-highlight px-2 py-0.5 rounded">
+                    {classroom?.code}
+                  </span>
+                </div>
+                <p className="text-xs text-auralis-muted">Subject: {classroom?.subject}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-auralis-muted">
+                  Lecture Title / Topic *
+                </label>
+                <input
+                  type="text"
+                  value={newLectureTitle}
+                  onChange={(e) => setNewLectureTitle(e.target.value)}
+                  placeholder={`e.g. ${classroom?.subject || "Lecture"} – Chapter 2 Topic`}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm font-medium outline-none transition-all ${
+                    isHighContrast
+                      ? "bg-[#162622] border-white/20 text-white placeholder:text-white/40"
+                      : "bg-white border-auralis-border text-auralis-text placeholder:text-auralis-muted focus:border-auralis-accent"
+                  }`}
+                  autoFocus
+                />
+                <p className="text-[11px] text-auralis-muted mt-1.5">
+                  Starting this lecture begins a fresh session with new captions. Previous concluded lectures remain safely archived in Lecture History.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-inherit">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateLectureModalOpen(false)}
+                  disabled={isCreatingLecture}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-auralis-muted hover:text-auralis-text transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingLecture}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isCreatingLecture ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-white" />
+                  )}
+                  <span>Create &amp; Start Live Lecture</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

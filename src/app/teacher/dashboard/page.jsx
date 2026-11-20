@@ -53,6 +53,53 @@ export default function TeacherDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState(null);
 
+  // Modal State for Create Lecture in specific classroom
+  const [selectedClassForLecture, setSelectedClassForLecture] = useState(null);
+  const [lectureTitleInput, setLectureTitleInput] = useState("");
+  const [isCreatingLectureFromDash, setIsCreatingLectureFromDash] = useState(false);
+  const [createLectureDashError, setCreateLectureDashError] = useState("");
+
+  const openCreateLectureForClassroom = (cls) => {
+    setSelectedClassForLecture(cls);
+    setLectureTitleInput(`${cls.subject || cls.name} – ${new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`);
+    setCreateLectureDashError("");
+  };
+
+  const handleCreateLectureFromDash = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedClassForLecture) return;
+    setIsCreatingLectureFromDash(true);
+    setCreateLectureDashError("");
+
+    try {
+      const res = await fetch("/api/lectures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classroomId: selectedClassForLecture.id,
+          title: lectureTitleInput.trim() || `${selectedClassForLecture.name} Lecture`,
+          status: "LIVE",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateLectureDashError(data.error || "Failed to create lecture");
+        setIsCreatingLectureFromDash(false);
+        return;
+      }
+
+      // Close modal and redirect directly into classroom
+      setSelectedClassForLecture(null);
+      router.push(`/classroom/${selectedClassForLecture.id}?role=teacher`);
+    } catch (err) {
+      console.error("Dashboard create lecture error:", err);
+      setCreateLectureDashError("Failed to initialize lecture session");
+    } finally {
+      setIsCreatingLectureFromDash(false);
+    }
+  };
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
@@ -612,7 +659,7 @@ export default function TeacherDashboard() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-auralis-border/60">
+                        <div className="flex items-center gap-2.5 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-auralis-border/60 flex-wrap">
                           <button
                             onClick={() => handleCopyCode(cls.code)}
                             className="px-3 py-2 rounded-xl bg-auralis-bg hover:bg-auralis-surface border border-auralis-border flex items-center gap-2 text-xs font-mono font-bold text-auralis-text transition-colors group"
@@ -626,12 +673,22 @@ export default function TeacherDashboard() {
                             )}
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => openCreateLectureForClassroom(cls)}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-auralis-highlight hover:bg-auralis-surface border border-auralis-secondary/60 text-auralis-accent text-xs font-bold transition-all shadow-sm cursor-pointer"
+                            title="Create and start a new lecture for this classroom only"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>New Lecture</span>
+                          </button>
+
                           <Link
                             href={`/classroom/${cls.id}?role=teacher`}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold transition-all shadow-tactile"
                           >
                             <Play className="w-3.5 h-3.5 fill-white" />
-                            <span>Start Lecture</span>
+                            <span>Enter Room</span>
                           </Link>
                         </div>
                       </div>
@@ -863,13 +920,25 @@ export default function TeacherDashboard() {
                           </p>
                         </div>
 
-                        <Link
-                          href={`/classroom/${cls.id}?role=teacher`}
-                          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all shrink-0"
-                        >
-                          <Play className="w-4 h-4 fill-white" />
-                          <span>Start Live Broadcast Now</span>
-                        </Link>
+                        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => openCreateLectureForClassroom(cls)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-auralis-highlight hover:bg-auralis-surface border border-auralis-secondary/60 text-auralis-accent text-xs font-bold transition-all shadow-sm cursor-pointer"
+                            title="Create a new lecture in this classroom only"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Create Lecture</span>
+                          </button>
+
+                          <Link
+                            href={`/classroom/${cls.id}?role=teacher`}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all shrink-0"
+                          >
+                            <Play className="w-4 h-4 fill-white" />
+                            <span>Enter Room</span>
+                          </Link>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1371,6 +1440,102 @@ export default function TeacherDashboard() {
                     </>
                   ) : (
                     <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create New Lecture for Classroom Modal (Dashboard) */}
+      {selectedClassForLecture && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-float border border-auralis-border p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-auralis-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-auralis-accent text-white flex items-center justify-center shadow-tactile">
+                  <Play className="w-4 h-4 fill-white" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-auralis-accent">
+                    New Lecture Session
+                  </span>
+                  <h3 className="font-heading font-extrabold text-xl text-auralis-text">
+                    Create Lecture in {selectedClassForLecture.name}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedClassForLecture(null)}
+                className="p-1.5 rounded-lg text-auralis-muted hover:text-auralis-text hover:bg-auralis-bg transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {createLectureDashError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{createLectureDashError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateLectureFromDash} className="space-y-4">
+              <div className="p-3 rounded-xl bg-auralis-bg border border-auralis-border space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-auralis-text">
+                  <span>{selectedClassForLecture.name}</span>
+                  <span className="font-mono text-auralis-accent">{selectedClassForLecture.code}</span>
+                </div>
+                <div className="text-[11px] text-auralis-muted">
+                  Subject: {selectedClassForLecture.subject} • This lecture is assigned strictly to this classroom only.
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-auralis-text mb-1.5">
+                  Lecture Title / Topic *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={lectureTitleInput}
+                  onChange={(e) => setLectureTitleInput(e.target.value)}
+                  placeholder="e.g. Wave Mechanics – Chapter 1 Introduction"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white border border-auralis-border text-sm text-auralis-text placeholder:text-auralis-muted focus:outline-none focus:ring-2 focus:ring-auralis-accent focus:border-auralis-accent transition-colors"
+                  autoFocus
+                />
+                <p className="text-[11px] text-auralis-muted mt-1">
+                  Once this lecture is concluded, it will be sealed into Lecture History and cannot be re-opened.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-auralis-border flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedClassForLecture(null)}
+                  disabled={isCreatingLectureFromDash}
+                  className="px-4 py-2.5 rounded-xl border border-auralis-border text-xs font-semibold text-auralis-text hover:bg-auralis-bg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingLectureFromDash || !lectureTitleInput.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {isCreatingLectureFromDash ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Creating Session...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-white" />
+                      <span>Start Lecture in Room</span>
+                    </>
                   )}
                 </button>
               </div>
