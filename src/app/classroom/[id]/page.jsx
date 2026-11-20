@@ -758,33 +758,53 @@ export default function LiveClassroomPage() {
 
     const activeLec = currentLectureRef.current || currentLecture;
     try {
+      let savedLecture = null;
+
+      // 1. If an active lecture exists, conclude it via PATCH
       if (activeLec?.id) {
-        await fetch(`/api/lectures/${activeLec.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: "COMPLETED",
-            transcripts: transcripts,
-          }),
-        });
-      } else if (classroom?.id) {
-        const res = await fetch("/api/lectures", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            classroomId: classroom.id,
-            title: `${classroom.name} Lecture`,
-            status: "COMPLETED",
-            transcripts: transcripts,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.lecture) {
-            setCurrentLecture(data.lecture);
-            currentLectureRef.current = data.lecture;
+        try {
+          const patchRes = await fetch(`/api/lectures/${activeLec.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "COMPLETED",
+              transcripts: transcripts,
+            }),
+          });
+          if (patchRes.ok) {
+            const data = await patchRes.json();
+            savedLecture = data.lecture;
           }
+        } catch (patchErr) {
+          console.warn("PATCH lecture conclusion error:", patchErr);
         }
+      }
+
+      // 2. If no active lecture existed OR the patch failed (e.g. 404), create a completed lecture now
+      if (!savedLecture && classroom?.id) {
+        try {
+          const postRes = await fetch("/api/lectures", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              classroomId: classroom.id,
+              title: `${classroom.name || classroom.subject || "Lecture"} – ${new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`,
+              status: "COMPLETED",
+              transcripts: transcripts,
+            }),
+          });
+          if (postRes.ok) {
+            const data = await postRes.json();
+            savedLecture = data.lecture;
+          }
+        } catch (postErr) {
+          console.warn("POST completed lecture error:", postErr);
+        }
+      }
+
+      if (savedLecture) {
+        setCurrentLecture(savedLecture);
+        currentLectureRef.current = savedLecture;
       }
     } catch (err) {
       console.warn("Failed to conclude lecture:", err);

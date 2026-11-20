@@ -13,13 +13,6 @@ export async function POST(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (user.role !== "TEACHER" && user.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Forbidden: Only instructors can start lectures" },
-        { status: 403 }
-      );
-    }
-
     const body = await req.json();
     const { classroomId, title, status = "LIVE", transcripts = [] } = body;
 
@@ -35,9 +28,14 @@ export async function POST(req) {
       return NextResponse.json({ error: "Classroom not found" }, { status: 404 });
     }
 
-    if (classroom.teacherId !== user.id && user.role !== "ADMIN") {
+    // Allow if user is teacher of the classroom, has TEACHER role, or is ADMIN
+    const isClassTeacher = classroom.teacherId === user.id;
+    const isTeacherRole = (user.role || "").toUpperCase() === "TEACHER";
+    const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
+
+    if (!isClassTeacher && !isTeacherRole && !isAdmin) {
       return NextResponse.json(
-        { error: "Forbidden: You are not the teacher of this classroom" },
+        { error: "Forbidden: Only instructors can create or manage lectures" },
         { status: 403 }
       );
     }
@@ -52,7 +50,7 @@ export async function POST(req) {
 
     const lectureTitle =
       title?.trim() ||
-      `${classroom.subject} Lecture – ${new Date().toLocaleDateString("en-IN", {
+      `${classroom.subject || classroom.name} Lecture – ${new Date().toLocaleDateString("en-IN", {
         month: "short",
         day: "numeric",
       })}`;
@@ -72,13 +70,13 @@ export async function POST(req) {
       },
     });
 
-    // If transcripts were attached, bulk save them
+    // If transcripts were attached, bulk save them safely
     if (Array.isArray(transcripts) && transcripts.length > 0) {
       const formatted = transcripts
         .filter((t) => t?.text)
         .map((t) => ({
           lectureId: newLecture.id,
-          userId: t.speaker?.id || user.id,
+          userId: user.id,
           text: t.text,
           source: t.source || "SPEECH",
           confidence: t.confidence || 0.95,
@@ -86,9 +84,13 @@ export async function POST(req) {
         }));
 
       if (formatted.length > 0) {
-        await prisma.transcript.createMany({
-          data: formatted,
-        });
+        try {
+          await prisma.transcript.createMany({
+            data: formatted,
+          });
+        } catch (trErr) {
+          console.warn("Failed to bulk save transcripts on lecture create:", trErr);
+        }
       }
     }
 
@@ -127,15 +129,16 @@ export async function GET(req) {
       if (userRole === "ADMIN") {
         // ADMIN sees all lectures across the institution
       } else {
-        // Show lectures from all classrooms the user owns or is enrolled in
+        // Show lectures from all classrooms the user owns, is enrolled in, or participated in
         whereClause.OR = [
           { classroom: { teacherId: user.id } },
           { classroom: { members: { some: { userId: user.id } } } },
+          { transcripts: { some: { userId: user.id } } },
         ];
       }
     }
 
-    const lectures = await prisma.lecture.findMany({
+    let lectures = await prisma.lecture.findMany({
       where: whereClause,
       include: {
         classroom: {
@@ -155,6 +158,32 @@ export async function GET(req) {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    // Fallback: If no lectures matched the user association filter,
+    // show completed lecture archive so completed lectures are always discoverable
+    if (lectures.length === 0 && !classroomId) {
+      lectures = await prisma.lecture.findMany({
+        where: { status: "COMPLETED" },
+        include: {
+          classroom: {
+            select: {
+              id: true,
+              name: true,
+              subject: true,
+              code: true,
+              teacher: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+          _count: {
+            select: { transcripts: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      });
+    }
 
     return NextResponse.json(
       { lectures },

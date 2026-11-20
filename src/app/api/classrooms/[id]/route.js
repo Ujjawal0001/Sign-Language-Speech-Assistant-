@@ -56,24 +56,17 @@ export async function GET(req, { params }) {
     let isEnrolled = classroom.members.some((m) => m.userId === user.id);
 
     if (!isTeacher && !isEnrolled) {
-      if (user.role === "ADMIN" || user.role === "STUDENT" || !user.role) {
-        // Auto-enroll authenticated student/attendee into this classroom
-        try {
-          await prisma.classroomMember.create({
-            data: {
-              userId: user.id,
-              classroomId: classroom.id,
-            },
-          });
-          isEnrolled = true;
-        } catch (e) {
-          // Ignore unique constraint race condition
-        }
-      } else {
-        return NextResponse.json(
-          { error: "Forbidden: You are not a member of this classroom" },
-          { status: 403 }
-        );
+      // Auto-enroll authenticated student/attendee into this classroom
+      try {
+        await prisma.classroomMember.create({
+          data: {
+            userId: user.id,
+            classroomId: classroom.id,
+          },
+        });
+        isEnrolled = true;
+      } catch (e) {
+        // Ignore unique constraint race condition
       }
     }
 

@@ -92,10 +92,14 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: "Lecture not found" }, { status: 404 });
     }
 
-    // Only teacher of the classroom or admin can update status
-    if (lecture.classroom.teacherId !== user.id && user.role !== "ADMIN") {
+    // Allow if user is teacher of the classroom, has TEACHER role, or is ADMIN
+    const isClassTeacher = lecture.classroom.teacherId === user.id;
+    const isTeacherRole = (user.role || "").toUpperCase() === "TEACHER";
+    const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
+
+    if (!isClassTeacher && !isTeacherRole && !isAdmin) {
       return NextResponse.json(
-        { error: "Forbidden: Only the class instructor can modify lecture state" },
+        { error: "Forbidden: Only instructors can modify lecture state" },
         { status: 403 }
       );
     }
@@ -121,23 +125,27 @@ export async function PATCH(req, { params }) {
 
     // If transcripts were provided on conclusion, ensure any missing ones are saved
     if (Array.isArray(transcripts) && transcripts.length > 0) {
-      const existingCount = await prisma.transcript.count({
-        where: { lectureId: id },
-      });
-      if (existingCount === 0) {
-        const formatted = transcripts
-          .filter((t) => t?.text)
-          .map((t) => ({
-            lectureId: id,
-            userId: t.speaker?.id || user.id,
-            text: t.text,
-            source: t.source || "SPEECH",
-            confidence: t.confidence || 0.95,
-            timestamp: t.timestamp ? new Date(t.timestamp) : new Date(),
-          }));
-        if (formatted.length > 0) {
-          await prisma.transcript.createMany({ data: formatted });
+      try {
+        const existingCount = await prisma.transcript.count({
+          where: { lectureId: id },
+        });
+        if (existingCount === 0) {
+          const formatted = transcripts
+            .filter((t) => t?.text)
+            .map((t) => ({
+              lectureId: id,
+              userId: user.id,
+              text: t.text,
+              source: t.source || "SPEECH",
+              confidence: t.confidence || 0.95,
+              timestamp: t.timestamp ? new Date(t.timestamp) : new Date(),
+            }));
+          if (formatted.length > 0) {
+            await prisma.transcript.createMany({ data: formatted });
+          }
         }
+      } catch (trErr) {
+        console.warn("Failed to save transcripts on lecture conclusion:", trErr);
       }
     }
 
