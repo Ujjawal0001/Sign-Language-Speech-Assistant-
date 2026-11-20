@@ -1083,7 +1083,7 @@ export default function LiveClassroomPage() {
       )}
 
       {/* MAIN WORKSPACE BODY */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-5">
+      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-5 min-h-0">
         {/* Role Controls Bar */}
         {isTeacher ? (
           <TeacherControls
@@ -1119,8 +1119,8 @@ export default function LiveClassroomPage() {
         )}
 
         {/* 2. MAIN CAPTION VIEWPORT & 3. SIDE PANEL */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-5 items-stretch min-h-[500px]">
-          <div className="flex-1 flex flex-col gap-3 min-h-[480px]">
+        <div className="flex-1 flex flex-col lg:flex-row gap-5 items-stretch min-h-0 h-[640px] lg:h-[calc(100vh-230px)] lg:min-h-[520px] lg:max-h-[820px]">
+          <div className="flex-1 flex flex-col gap-3 min-h-0 h-full overflow-hidden">
             <CaptionView
               transcripts={filteredTranscripts}
               interimText={interimText}
@@ -1139,7 +1139,7 @@ export default function LiveClassroomPage() {
             {isTeacher && (
               <form
                 onSubmit={handleManualCaptionSubmit}
-                className={`flex items-center gap-2 p-2 rounded-2xl border transition-colors shadow-tactile ${
+                className={`shrink-0 flex items-center gap-2 p-2 rounded-2xl border transition-colors shadow-tactile ${
                   isHighContrast
                     ? "bg-[#0B0F0E] border-white/20"
                     : "bg-white border-auralis-border"
@@ -1157,7 +1157,7 @@ export default function LiveClassroomPage() {
                 <button
                   type="submit"
                   disabled={!manualCaption.trim()}
-                  className="px-4 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold transition-all disabled:opacity-40 shadow-tactile"
+                  className="px-4 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold transition-all disabled:opacity-40 shadow-tactile shrink-0"
                 >
                   Write to Caption Block
                 </button>

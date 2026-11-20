@@ -63,7 +63,7 @@ export default function SidePanel({
 
   return (
     <aside
-      className={`w-full lg:w-80 flex flex-col gap-4 shrink-0 transition-colors ${
+      className={`w-full lg:w-80 flex flex-col gap-4 shrink-0 transition-colors lg:overflow-y-auto min-h-0 lg:max-h-full pr-0.5 ${
         isHighContrast ? "text-white" : "text-auralis-text"
       }`}
     >

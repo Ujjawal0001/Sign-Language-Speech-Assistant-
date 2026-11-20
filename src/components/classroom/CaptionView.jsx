@@ -97,7 +97,7 @@ export default function CaptionView({
 
   return (
     <div
-      className={`relative flex-1 flex flex-col h-full rounded-2xl border transition-colors overflow-hidden ${
+      className={`relative flex-1 flex flex-col h-full min-h-0 rounded-2xl border transition-colors overflow-hidden ${
         isHighContrast
           ? "bg-[#0B0F0E] border-white/20 text-white"
           : "bg-white border-auralis-border text-auralis-text shadow-tactile"
@@ -130,7 +130,7 @@ export default function CaptionView({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 p-6 sm:p-10 lg:p-12 overflow-y-auto space-y-8"
+        className="flex-1 min-h-0 p-6 sm:p-10 lg:p-12 overflow-y-auto space-y-8"
         aria-live="polite"
         role="region"
         aria-label="Real-time lecture transcript"
@@ -372,7 +372,7 @@ export default function CaptionView({
 
       {/* Viewport Footer Banner */}
       <div
-        className={`px-6 py-2.5 border-t text-xs flex items-center justify-between ${
+        className={`shrink-0 px-6 py-2.5 border-t text-xs flex items-center justify-between ${
           isHighContrast
             ? "bg-[#0B0F0E] border-white/20 text-white/60"
             : "bg-auralis-bg/60 border-auralis-border text-auralis-muted"

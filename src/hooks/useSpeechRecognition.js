@@ -61,7 +61,7 @@ export function useSpeechRecognition({
   const isListeningRef = useRef(false);
   const shouldKeepListeningRef = useRef(false);
   const restartTimerRef = useRef(null);
-  const silenceTimerRef = useRef(null);
+  const sentenceTimerRef = useRef(null);
   const micDecayTimerRef = useRef(null);
 
   const onFinalTranscriptRef = useRef(onFinalTranscript);
@@ -70,6 +70,7 @@ export function useSpeechRecognition({
 
   // Result tracking refs
   const finalizedIndexRef = useRef(0);
+  const sentenceBufferRef = useRef("");
   const activeInterimRef = useRef("");
   const lastCommittedTextRef = useRef("");
 
@@ -143,6 +144,42 @@ export function useSpeechRecognition({
     }
   }, []);
 
+  // Helper to commit accumulated sentence buffer as a single coherent block
+  const commitSentenceBuffer = useCallback((includeInterim = false) => {
+    if (sentenceTimerRef.current) {
+      clearTimeout(sentenceTimerRef.current);
+      sentenceTimerRef.current = null;
+    }
+
+    let textToCommit = sentenceBufferRef.current.trim();
+    if (includeInterim && activeInterimRef.current) {
+      textToCommit = [textToCommit, activeInterimRef.current.trim()]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      activeInterimRef.current = "";
+    }
+
+    sentenceBufferRef.current = "";
+
+    if (includeInterim) {
+      setInterimText("");
+      if (onInterimTranscriptRef.current) {
+        onInterimTranscriptRef.current("");
+      }
+    } else {
+      const remainingInterim = activeInterimRef.current || "";
+      setInterimText(remainingInterim);
+      if (onInterimTranscriptRef.current) {
+        onInterimTranscriptRef.current(remainingInterim);
+      }
+    }
+
+    if (textToCommit.length > 0) {
+      commitFinal(textToCommit, 0.95);
+    }
+  }, [commitFinal]);
+
   // Safely destroy current recognition instance
   const destroyCurrentRecognition = useCallback(() => {
     if (recognitionRef.current) {
@@ -200,6 +237,13 @@ export function useSpeechRecognition({
     recognition.onspeechend = () => {
       setIsSpeaking(false);
       setMicLevel(10);
+      // Brief buffer (700ms) after speech ends to finalize the full sentence
+      if (sentenceTimerRef.current) {
+        clearTimeout(sentenceTimerRef.current);
+      }
+      sentenceTimerRef.current = setTimeout(() => {
+        commitSentenceBuffer(true);
+      }, 700);
     };
 
     recognition.onsoundend = () => {
@@ -221,7 +265,10 @@ export function useSpeechRecognition({
             finalizedIndexRef.current = i + 1;
             const trimmed = rawTranscript.trim();
             if (trimmed.length > 0) {
-              commitFinal(trimmed, result[0]?.confidence || 0.95);
+              // Accumulate finalized words into the cohesive sentence buffer
+              sentenceBufferRef.current = sentenceBufferRef.current
+                ? `${sentenceBufferRef.current} ${trimmed}`
+                : trimmed;
             }
           }
         } else {
@@ -229,31 +276,40 @@ export function useSpeechRecognition({
         }
       }
 
-      // Update interim display
-      activeInterimRef.current = currentInterim;
-      setInterimText(currentInterim);
+      activeInterimRef.current = currentInterim.trim();
+
+      // Combine accumulated buffer with current live interim words
+      const liveSentence = [sentenceBufferRef.current, activeInterimRef.current]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      // Update interim display so speaker sees their full evolving sentence in real-time
+      setInterimText(liveSentence);
       if (onInterimTranscriptRef.current) {
-        onInterimTranscriptRef.current(currentInterim);
+        onInterimTranscriptRef.current(liveSentence);
       }
 
-      // Silence auto-commit debounce: if user pauses for 1.3s and Chrome
-      // hasn't marked it isFinal yet, commit the interim text as a completed sentence!
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
+      // Check if accumulated buffer reached a natural sentence boundary:
+      // 1) Explicit terminal punctuation (. ? !)
+      // 2) Or accumulated >= 18 words (prevents uncomfortably long run-on captions)
+      const bufferedWords = sentenceBufferRef.current.split(/\s+/).filter(Boolean);
+      const endsWithTerminal = /[.?!]$/.test(sentenceBufferRef.current.trim());
+
+      if (bufferedWords.length >= 18 || endsWithTerminal) {
+        commitSentenceBuffer(false);
+        return;
       }
-      if (currentInterim.trim().length > 0) {
-        silenceTimerRef.current = setTimeout(() => {
-          const lingering = activeInterimRef.current.trim();
-          if (lingering.length > 0) {
-            commitFinal(lingering, 0.92);
-            activeInterimRef.current = "";
-            setInterimText("");
-            if (onInterimTranscriptRef.current) {
-              onInterimTranscriptRef.current("");
-            }
-            finalizedIndexRef.current = event.results.length;
-          }
-        }, 1300);
+
+      // Conversational pause / silence debounce:
+      // When speaker pauses for 1.4s, commit the accumulated sentence into one caption block
+      if (sentenceTimerRef.current) {
+        clearTimeout(sentenceTimerRef.current);
+      }
+      if (liveSentence.length > 0) {
+        sentenceTimerRef.current = setTimeout(() => {
+          commitSentenceBuffer(true);
+        }, 1400);
       }
     };
 
@@ -290,14 +346,7 @@ export function useSpeechRecognition({
 
     recognition.onend = () => {
       // 1. Commit any lingering speech
-      if (activeInterimRef.current && activeInterimRef.current.trim().length > 0) {
-        commitFinal(activeInterimRef.current.trim(), 0.92);
-        activeInterimRef.current = "";
-        setInterimText("");
-        if (onInterimTranscriptRef.current) {
-          onInterimTranscriptRef.current("");
-        }
-      }
+      commitSentenceBuffer(true);
 
       setIsSpeaking(false);
       setMicLevel(0);
@@ -319,7 +368,7 @@ export function useSpeechRecognition({
     };
 
     return recognition;
-  }, [commitFinal, destroyCurrentRecognition, pulseMicLevel]);
+  }, [commitFinal, commitSentenceBuffer, destroyCurrentRecognition, pulseMicLevel]);
 
   // Restart handler ref
   const startNewSessionRef = useRef(null);
@@ -392,9 +441,9 @@ export function useSpeechRecognition({
       clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
     }
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
+    if (sentenceTimerRef.current) {
+      clearTimeout(sentenceTimerRef.current);
+      sentenceTimerRef.current = null;
     }
     if (micDecayTimerRef.current) {
       clearTimeout(micDecayTimerRef.current);
@@ -402,10 +451,7 @@ export function useSpeechRecognition({
     }
 
     // Commit any lingering speech
-    if (activeInterimRef.current && activeInterimRef.current.trim().length > 0) {
-      commitFinal(activeInterimRef.current.trim(), 0.92);
-      activeInterimRef.current = "";
-    }
+    commitSentenceBuffer(true);
 
     destroyCurrentRecognition();
     setIsListening(false);
@@ -413,17 +459,18 @@ export function useSpeechRecognition({
     setInterimText("");
     setMicLevel(0);
     setIsSpeaking(false);
-  }, [commitFinal, destroyCurrentRecognition]);
+  }, [commitSentenceBuffer, destroyCurrentRecognition]);
 
   const resetTranscripts = useCallback(() => {
     setFinalTranscripts([]);
     setInterimText("");
     activeInterimRef.current = "";
+    sentenceBufferRef.current = "";
     lastCommittedTextRef.current = "";
     finalizedIndexRef.current = 0;
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
+    if (sentenceTimerRef.current) {
+      clearTimeout(sentenceTimerRef.current);
+      sentenceTimerRef.current = null;
     }
   }, []);
 
@@ -432,7 +479,7 @@ export function useSpeechRecognition({
     return () => {
       shouldKeepListeningRef.current = false;
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (sentenceTimerRef.current) clearTimeout(sentenceTimerRef.current);
       if (micDecayTimerRef.current) clearTimeout(micDecayTimerRef.current);
       destroyCurrentRecognition();
     };
