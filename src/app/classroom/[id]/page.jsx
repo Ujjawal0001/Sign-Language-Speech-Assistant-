@@ -1119,8 +1119,8 @@ export default function LiveClassroomPage() {
         )}
 
         {/* 2. MAIN CAPTION VIEWPORT & 3. SIDE PANEL */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-5 items-stretch min-h-0 h-[640px] lg:h-[calc(100vh-230px)] lg:min-h-[520px] lg:max-h-[820px]">
-          <div className="flex-1 flex flex-col gap-3 min-h-0 h-full overflow-hidden">
+        <div className="w-full flex flex-col lg:flex-row gap-5 items-start">
+          <div className="flex-1 w-full flex flex-col gap-3 min-w-0">
             <CaptionView
               transcripts={filteredTranscripts}
               interimText={interimText}

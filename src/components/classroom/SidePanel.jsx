@@ -61,11 +61,17 @@ export default function SidePanel({
     setTimeout(() => setDownloadSuccess(false), 3000);
   };
 
+  const isTeacher = userRole === "TEACHER";
+
   return (
     <aside
-      className={`w-full lg:w-80 flex flex-col gap-4 shrink-0 transition-colors lg:overflow-y-auto min-h-0 lg:max-h-full pr-0.5 ${
+      className={`w-full lg:w-80 flex flex-col gap-4 shrink-0 transition-colors lg:overflow-y-auto min-h-0 caption-scroll pr-1 ${
         isHighContrast ? "text-white" : "text-auralis-text"
       }`}
+      style={{
+        height: isTeacher ? "620px" : "560px",
+        maxHeight: isTeacher ? "620px" : "560px",
+      }}
     >
       {/* 1. Live Engine & Connection Telemetry */}
       <div

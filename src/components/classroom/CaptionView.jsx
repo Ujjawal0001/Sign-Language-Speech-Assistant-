@@ -97,11 +97,16 @@ export default function CaptionView({
 
   return (
     <div
-      className={`relative flex-1 flex flex-col h-full min-h-0 rounded-2xl border transition-colors overflow-hidden ${
+      className={`relative w-full flex flex-col rounded-2xl border transition-colors overflow-hidden shrink-0 ${
         isHighContrast
           ? "bg-[#0B0F0E] border-white/20 text-white"
           : "bg-white border-auralis-border text-auralis-text shadow-tactile"
       }`}
+      style={{
+        height: "560px",
+        maxHeight: "560px",
+        minHeight: "560px",
+      }}
     >
       {/* Gesture Callout Toast when sign language detected */}
       {activeSign && (
@@ -126,11 +131,11 @@ export default function CaptionView({
         </div>
       )}
 
-      {/* Main Scrollable Viewport */}
+      {/* Main Scrollable Viewport (Fixed Height Container) */}
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 p-6 sm:p-10 lg:p-12 overflow-y-auto space-y-8"
+        className="flex-1 min-h-0 p-6 sm:p-10 lg:p-12 overflow-y-auto overflow-x-hidden space-y-8 caption-scroll"
         aria-live="polite"
         role="region"
         aria-label="Real-time lecture transcript"
@@ -307,7 +312,7 @@ export default function CaptionView({
                   </div>
 
                   <p
-                    className={`font-sans tracking-tight font-medium ${getTypographyClass()} ${
+                    className={`font-sans tracking-tight font-medium break-words ${getTypographyClass()} ${
                       isHighContrast
                         ? isGesture
                           ? "text-[#FFE27A]"
@@ -342,7 +347,7 @@ export default function CaptionView({
                 </div>
 
                 <p
-                  className={`font-sans italic ${getInterimTypographyClass()} ${
+                  className={`font-sans italic break-words ${getInterimTypographyClass()} ${
                     isHighContrast ? "text-[#FFE27A]/90" : "text-auralis-accent/90"
                   }`}
                 >
