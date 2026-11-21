@@ -48,6 +48,7 @@ export function useSpeechRecognition({
   language = "en-IN",
   onFinalTranscript = null,
   onInterimTranscript = null,
+  disabled = false,
 }) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
@@ -60,6 +61,7 @@ export function useSpeechRecognition({
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
   const shouldKeepListeningRef = useRef(false);
+  const disabledRef = useRef(disabled);
   const restartTimerRef = useRef(null);
   const sentenceTimerRef = useRef(null);
   const micDecayTimerRef = useRef(null);
@@ -251,6 +253,7 @@ export function useSpeechRecognition({
     };
 
     recognition.onresult = (event) => {
+      if (disabledRef.current) return;
       let currentInterim = "";
 
       pulseMicLevel(90);
@@ -374,7 +377,7 @@ export function useSpeechRecognition({
   const startNewSessionRef = useRef(null);
 
   const startNewSession = useCallback(() => {
-    if (!shouldKeepListeningRef.current) return;
+    if (!shouldKeepListeningRef.current || disabledRef.current) return;
     destroyCurrentRecognition();
     finalizedIndexRef.current = 0; // Reset index for fresh session
 
@@ -397,10 +400,22 @@ export function useSpeechRecognition({
   }, [createRecognitionInstance, destroyCurrentRecognition]);
 
   useEffect(() => {
+    disabledRef.current = disabled;
+    if (disabled) {
+      shouldKeepListeningRef.current = false;
+      stopListening();
+    }
+  }, [disabled, stopListening]);
+
+  useEffect(() => {
     startNewSessionRef.current = startNewSession;
   }, [startNewSession]);
 
   const startListening = useCallback(async () => {
+    if (disabledRef.current) {
+      console.warn("Speech recognition is disabled (lecture concluded).");
+      return;
+    }
     if (!isSupported) {
       setError("Web Speech API is not supported on this browser. Please use Chrome or Edge.");
       return;

@@ -179,10 +179,11 @@ export default function TeacherControls({
 
           {/* Right: Camera Toggle, Language Selector & Mic Status Indicator */}
           <div className="flex items-center gap-3 flex-wrap">
-            {onToggleCamera && (
+            {onToggleCamera && lectureStatus !== "COMPLETED" && (
               <button
                 type="button"
                 onClick={onToggleCamera}
+                disabled={lectureStatus === "COMPLETED"}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
                   isCameraActive
                     ? isHighContrast

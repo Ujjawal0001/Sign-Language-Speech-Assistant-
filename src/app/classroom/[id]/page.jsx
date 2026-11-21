@@ -179,6 +179,10 @@ export default function LiveClassroomPage() {
 
   // Start Camera Feed safely
   const startCamera = useCallback(async () => {
+    if (lectureStatus === "COMPLETED") {
+      console.warn("Camera cannot be opened: lecture has concluded.");
+      return;
+    }
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert("Camera is not supported on this device/browser.");
@@ -202,16 +206,21 @@ export default function LiveClassroomPage() {
       console.warn("Camera start exception:", err);
       alert("Camera access was not granted or camera is occupied by another app: " + err.message);
     }
-  }, []);
+  }, [lectureStatus]);
 
   // Toggle Camera Feed (for Sign Gesture capture)
   const toggleCamera = useCallback(() => {
+    if (lectureStatus === "COMPLETED") {
+      console.warn("Camera cannot be toggled: lecture has concluded.");
+      stopCamera();
+      return;
+    }
     if (isCameraActive) {
       stopCamera();
     } else {
       startCamera();
     }
-  }, [isCameraActive, stopCamera, startCamera]);
+  }, [lectureStatus, isCameraActive, stopCamera, startCamera]);
 
   // Ensure stream stays attached whenever video element is rendered or re-mounted
   useEffect(() => {
@@ -426,11 +435,11 @@ export default function LiveClassroomPage() {
           setTranscripts([]);
           setDuration(0);
         } else if (status === "COMPLETED") {
+          stopCamera();
           const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
           if (!isCurrentTeacher) {
             setIsClassConcluded(true);
             setAutoRedirectCountdown(5);
-            stopCamera();
           }
         }
       }
@@ -588,6 +597,7 @@ export default function LiveClassroomPage() {
   // Speech Recognition Final Transcript Handler
   const handleFinalTranscript = useCallback(
     async (finalEntry) => {
+      if (lectureStatus === "COMPLETED" || currentLectureRef.current?.status === "COMPLETED") return;
       if (!finalEntry?.text) return;
 
       const transcriptId = `tr-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
@@ -638,18 +648,19 @@ export default function LiveClassroomPage() {
         }
       }
     },
-    [user?.id, user?.name, classroom?.teacher?.name, currentLecture, sendFinalCaption, sendInterimCaption]
+    [user?.id, user?.name, classroom?.teacher?.name, currentLecture, lectureStatus, sendFinalCaption, sendInterimCaption]
   );
 
   // Speech Recognition Interim Transcript Handler
   const handleInterimTranscript = useCallback(
     (interim) => {
+      if (lectureStatus === "COMPLETED" || currentLectureRef.current?.status === "COMPLETED") return;
       // 1. Immediately show typing words on instructor screen
       setInterimText(interim);
       // 2. Immediately stream typing words to student screen
       sendInterimCaption(interim, "SPEECH");
     },
-    [sendInterimCaption]
+    [lectureStatus, sendInterimCaption]
   );
 
   // Initialize Web Speech Hook
@@ -664,11 +675,21 @@ export default function LiveClassroomPage() {
     language: speechLanguage,
     onFinalTranscript: handleFinalTranscript,
     onInterimTranscript: handleInterimTranscript,
+    disabled: lectureStatus === "COMPLETED",
   });
+
+  // Strictly prevent camera or microphone from running when lecture is completed
+  useEffect(() => {
+    if (lectureStatus === "COMPLETED") {
+      stopCamera();
+      stopListening();
+    }
+  }, [lectureStatus, stopCamera, stopListening]);
 
   // Computer Vision Gesture Detected Handler
   const handleGestureDetected = useCallback(
     async (stabilized) => {
+      if (lectureStatus === "COMPLETED" || currentLectureRef.current?.status === "COMPLETED") return;
       const signLabel = stabilized.label || stabilized.gesture;
 
       // 1. Show local sign alert toast
@@ -741,7 +762,7 @@ export default function LiveClassroomPage() {
     videoRef,
     canvasRef,
     onGestureDetected: handleGestureDetected,
-    enabled: isCameraActive,
+    enabled: isCameraActive && lectureStatus !== "COMPLETED",
   });
 
   // Teacher Action: Create a Brand New Lecture for this Classroom Only

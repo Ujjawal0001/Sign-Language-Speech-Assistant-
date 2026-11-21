@@ -44,7 +44,7 @@ export async function POST(req) {
     const isTeacher = lecture.classroom.teacherId === user.id || (user.role || "").toUpperCase() === "TEACHER";
     const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
 
-    if (lecture.status === "COMPLETED" && !isTeacher && !isAdmin) {
+    if (lecture.status === "COMPLETED") {
       return NextResponse.json(
         { error: "This lecture has concluded. New captions cannot be appended to a concluded session." },
         { status: 400 }
