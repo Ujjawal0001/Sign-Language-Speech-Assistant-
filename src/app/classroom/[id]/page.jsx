@@ -78,7 +78,13 @@ export default function LiveClassroomPage() {
   const [pendingDoubts, setPendingDoubts] = useState([]);
   const [doubtAcknowledgedToast, setDoubtAcknowledgedToast] = useState(null);
 
-  const isTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
+  const isTeacher =
+    urlRole === "student"
+      ? false
+      : urlRole === "teacher"
+      ? true
+      : (classroom?.teacherId && user?.id && classroom.teacherId === user.id) ||
+        (user?.role || "").toUpperCase() === "TEACHER";
 
   const currentLectureRef = useRef(null);
   useEffect(() => {
@@ -351,7 +357,13 @@ export default function LiveClassroomPage() {
               currentLectureRef.current = completed;
               setLectureStatus("COMPLETED");
 
-              const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
+              const isCurrentTeacher =
+                urlRole === "student"
+                  ? false
+                  : urlRole === "teacher"
+                  ? true
+                  : (classData?.classroom?.teacherId && classData.classroom.teacherId === user?.id) ||
+                    (user?.role || "").toUpperCase() === "TEACHER";
               if (!isCurrentTeacher) {
                 setIsClassConcluded(true);
                 setAutoRedirectCountdown(5);
@@ -436,8 +448,7 @@ export default function LiveClassroomPage() {
           setDuration(0);
         } else if (status === "COMPLETED") {
           stopCamera();
-          const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
-          if (!isCurrentTeacher) {
+          if (!isTeacher) {
             setIsClassConcluded(true);
             setAutoRedirectCountdown(5);
           }
@@ -448,7 +459,7 @@ export default function LiveClassroomPage() {
         currentLectureRef.current = { id: lectureId, status };
       }
     },
-    [user?.role, classroom?.teacherId, urlRole, stopCamera]
+    [isTeacher, stopCamera]
   );
 
   // Student Doubt Socket Listeners
@@ -685,6 +696,44 @@ export default function LiveClassroomPage() {
       stopListening();
     }
   }, [lectureStatus, stopCamera, stopListening]);
+
+  // Student active session sync: polls lecture state every 3s to guarantee immediate conclusion sync even if WS packet was missed
+  useEffect(() => {
+    if (isTeacher || isClassConcluded || !classroomId) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/lectures?classroomId=${classroomId}&_t=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          const active = data.lectures?.find((l) => l.status === "LIVE" || l.status === "PAUSED");
+          const completed = data.lectures?.find((l) => l.status === "COMPLETED");
+
+          // If no active lecture exists and the latest is completed, trigger conclusion!
+          if (!active && completed) {
+            setLectureStatus("COMPLETED");
+            setCurrentLecture(completed);
+            currentLectureRef.current = completed;
+            setIsClassConcluded(true);
+            setAutoRedirectCountdown(5);
+            stopCamera();
+            stopListening();
+          }
+        }
+      } catch (e) {
+        // Ignore polling error
+      }
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isTeacher, isClassConcluded, classroomId, stopCamera, stopListening]);
 
   // Computer Vision Gesture Detected Handler
   const handleGestureDetected = useCallback(

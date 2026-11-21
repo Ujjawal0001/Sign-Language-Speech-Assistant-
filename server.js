@@ -56,6 +56,7 @@ app.prepare().then(() => {
       socket.join(mainRoom);
       if (classroomId) {
         socket.join(`class_${classroomId}`);
+        socket.join(classroomId);
       }
       if (lectureId) {
         socket.join(lectureId);
@@ -146,7 +147,10 @@ app.prepare().then(() => {
       const classroomId = payload?.classroomId || socket.data?.classroomId;
       const rooms = new Set();
       if (lectureId) rooms.add(lectureId);
-      if (classroomId) rooms.add(`class_${classroomId}`);
+      if (classroomId) {
+        rooms.add(`class_${classroomId}`);
+        rooms.add(classroomId);
+      }
       if (rooms.size === 0) return;
 
       for (const r of rooms) {

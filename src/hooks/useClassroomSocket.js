@@ -246,7 +246,7 @@ export function useClassroomSocket({
 
   const updateLectureStatus = useCallback(
     (status, customLectureId = null) => {
-      if (socketRef.current && socketRef.current.connected) {
+      if (socketRef.current) {
         socketRef.current.emit("lecture-status-change", {
           lectureId: customLectureId || activeRoomId,
           classroomId,
