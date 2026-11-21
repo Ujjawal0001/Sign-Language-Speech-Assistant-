@@ -42,20 +42,26 @@ export async function GET(req, { params }) {
     const isAdmin = user.role === "ADMIN";
 
     if (!isTeacher && !isAdmin) {
-      const membership = await prisma.classroomMember.findUnique({
-        where: {
-          userId_classroomId: {
-            userId: user.id,
-            classroomId: lecture.classroomId,
+      try {
+        const membership = await prisma.classroomMember.findUnique({
+          where: {
+            userId_classroomId: {
+              userId: user.id,
+              classroomId: lecture.classroomId,
+            },
           },
-        },
-      });
+        });
 
-      if (!membership) {
-        return NextResponse.json(
-          { error: "Forbidden: You are not enrolled in this classroom" },
-          { status: 403 }
-        );
+        if (!membership) {
+          await prisma.classroomMember.create({
+            data: {
+              userId: user.id,
+              classroomId: lecture.classroomId,
+            },
+          });
+        }
+      } catch (enrollErr) {
+        // Ignore duplicate key race condition
       }
     }
 
@@ -134,23 +140,25 @@ export async function PATCH(req, { params }) {
     // If transcripts were provided on conclusion, ensure any missing ones are saved
     if (Array.isArray(transcripts) && transcripts.length > 0) {
       try {
-        const existingCount = await prisma.transcript.count({
+        const existingList = await prisma.transcript.findMany({
           where: { lectureId: id },
+          select: { text: true },
         });
-        if (existingCount === 0) {
-          const formatted = transcripts
-            .filter((t) => t?.text)
-            .map((t) => ({
-              lectureId: id,
-              userId: user.id,
-              text: t.text,
-              source: t.source || "SPEECH",
-              confidence: t.confidence || 0.95,
-              timestamp: t.timestamp ? new Date(t.timestamp) : new Date(),
-            }));
-          if (formatted.length > 0) {
-            await prisma.transcript.createMany({ data: formatted });
-          }
+        const existingTexts = new Set(existingList.map((e) => (e.text || "").trim()));
+
+        const formatted = transcripts
+          .filter((t) => t?.text && !existingTexts.has(t.text.trim()))
+          .map((t) => ({
+            lectureId: id,
+            userId: user.id,
+            text: t.text.trim(),
+            source: t.source || "SPEECH",
+            confidence: t.confidence || 0.95,
+            timestamp: t.timestamp ? new Date(t.timestamp) : new Date(),
+          }));
+
+        if (formatted.length > 0) {
+          await prisma.transcript.createMany({ data: formatted });
         }
       } catch (trErr) {
         console.warn("Failed to save transcripts on lecture conclusion:", trErr);

@@ -28,20 +28,27 @@ export async function GET(req, { params }) {
     const isAdmin = user.role === "ADMIN";
 
     if (!isTeacher && !isAdmin) {
-      const membership = await prisma.classroomMember.findUnique({
-        where: {
-          userId_classroomId: {
-            userId: user.id,
-            classroomId: lecture.classroomId,
+      try {
+        const membership = await prisma.classroomMember.findUnique({
+          where: {
+            userId_classroomId: {
+              userId: user.id,
+              classroomId: lecture.classroomId,
+            },
           },
-        },
-      });
+        });
 
-      if (!membership) {
-        return NextResponse.json(
-          { error: "Forbidden: You are not enrolled in this classroom" },
-          { status: 403 }
-        );
+        if (!membership) {
+          // Auto-enroll authenticated student/attendee into this classroom
+          await prisma.classroomMember.create({
+            data: {
+              userId: user.id,
+              classroomId: lecture.classroomId,
+            },
+          });
+        }
+      } catch (enrollErr) {
+        // If duplicate key race condition occurs, ignore
       }
     }
 

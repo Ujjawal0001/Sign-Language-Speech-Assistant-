@@ -40,32 +40,38 @@ export async function POST(req) {
       return NextResponse.json({ error: "Lecture not found" }, { status: 404 });
     }
 
-    if (lecture.status === "COMPLETED") {
+    // Check membership / teacher status
+    const isTeacher = lecture.classroom.teacherId === user.id || (user.role || "").toUpperCase() === "TEACHER";
+    const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
+
+    if (lecture.status === "COMPLETED" && !isTeacher && !isAdmin) {
       return NextResponse.json(
         { error: "This lecture has concluded. New captions cannot be appended to a concluded session." },
         { status: 400 }
       );
     }
 
-    // Check membership / teacher status
-    const isTeacher = lecture.classroom.teacherId === user.id;
-    const isAdmin = user.role === "ADMIN";
-
     if (!isTeacher && !isAdmin) {
-      const membership = await prisma.classroomMember.findUnique({
-        where: {
-          userId_classroomId: {
-            userId: user.id,
-            classroomId: lecture.classroomId,
+      try {
+        const membership = await prisma.classroomMember.findUnique({
+          where: {
+            userId_classroomId: {
+              userId: user.id,
+              classroomId: lecture.classroomId,
+            },
           },
-        },
-      });
+        });
 
-      if (!membership) {
-        return NextResponse.json(
-          { error: "Forbidden: You are not enrolled in this lecture's classroom" },
-          { status: 403 }
-        );
+        if (!membership) {
+          await prisma.classroomMember.create({
+            data: {
+              userId: user.id,
+              classroomId: lecture.classroomId,
+            },
+          });
+        }
+      } catch (enrollErr) {
+        // Ignore duplicate key race condition
       }
     }
 

@@ -29,6 +29,7 @@ import {
   EyeOff,
   Edit3,
   User,
+  FileText,
 } from "lucide-react";
 
 export default function StudentDashboard() {
@@ -857,17 +858,29 @@ export default function StudentDashboard() {
                             </div>
                           </div>
 
-                          <Link
-                            href={`/classroom/${cls.id}?role=student`}
-                            className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-tactile ${
-                              isLive
-                                ? "bg-auralis-accent text-white hover:bg-auralis-accent-hover"
-                                : "bg-auralis-bg hover:bg-auralis-surface border border-auralis-border text-auralis-text"
-                            }`}
-                          >
-                            <Radio className="w-4 h-4" />
-                            <span>{isLive ? "Join Live Caption Stream" : "Open Classroom Workspace"}</span>
-                          </Link>
+                          <div className="space-y-2 pt-2">
+                            <Link
+                              href={`/classroom/${cls.id}?role=student`}
+                              className={`w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-tactile ${
+                                isLive
+                                  ? "bg-auralis-accent text-white hover:bg-auralis-accent-hover"
+                                  : "bg-auralis-bg hover:bg-auralis-surface border border-auralis-border text-auralis-text"
+                              }`}
+                            >
+                              <Radio className="w-4 h-4" />
+                              <span>{isLive ? "Join Live Caption Stream" : "Open Classroom Workspace"}</span>
+                            </Link>
+
+                            {cls.lectures && cls.lectures.length > 0 && (
+                              <Link
+                                href={cls.lectures[0]?.id ? `/lectures/${cls.lectures[0].id}` : `/lectures?classroomId=${cls.id}`}
+                                className="w-full py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-auralis-accent bg-auralis-highlight/70 hover:bg-auralis-highlight border border-auralis-secondary/40 transition-all"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>View Transcripts &amp; AI Notes</span>
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
