@@ -399,6 +399,32 @@ export function useSpeechRecognition({
     }
   }, [createRecognitionInstance, destroyCurrentRecognition]);
 
+  const stopListening = useCallback(() => {
+    shouldKeepListeningRef.current = false;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    if (sentenceTimerRef.current) {
+      clearTimeout(sentenceTimerRef.current);
+      sentenceTimerRef.current = null;
+    }
+    if (micDecayTimerRef.current) {
+      clearTimeout(micDecayTimerRef.current);
+      micDecayTimerRef.current = null;
+    }
+
+    // Commit any lingering speech
+    commitSentenceBuffer(true);
+
+    destroyCurrentRecognition();
+    setIsListening(false);
+    isListeningRef.current = false;
+    setInterimText("");
+    setMicLevel(0);
+    setIsSpeaking(false);
+  }, [commitSentenceBuffer, destroyCurrentRecognition]);
+
   useEffect(() => {
     disabledRef.current = disabled;
     if (disabled) {
@@ -449,32 +475,6 @@ export function useSpeechRecognition({
       setError(err.message || "Failed to start speech recognition");
     }
   }, [isSupported, startNewSession]);
-
-  const stopListening = useCallback(() => {
-    shouldKeepListeningRef.current = false;
-    if (restartTimerRef.current) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
-    }
-    if (sentenceTimerRef.current) {
-      clearTimeout(sentenceTimerRef.current);
-      sentenceTimerRef.current = null;
-    }
-    if (micDecayTimerRef.current) {
-      clearTimeout(micDecayTimerRef.current);
-      micDecayTimerRef.current = null;
-    }
-
-    // Commit any lingering speech
-    commitSentenceBuffer(true);
-
-    destroyCurrentRecognition();
-    setIsListening(false);
-    isListeningRef.current = false;
-    setInterimText("");
-    setMicLevel(0);
-    setIsSpeaking(false);
-  }, [commitSentenceBuffer, destroyCurrentRecognition]);
 
   const resetTranscripts = useCallback(() => {
     setFinalTranscripts([]);
