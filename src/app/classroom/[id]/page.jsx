@@ -342,6 +342,12 @@ export default function LiveClassroomPage() {
               currentLectureRef.current = completed;
               setLectureStatus("COMPLETED");
 
+              const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
+              if (!isCurrentTeacher) {
+                setIsClassConcluded(true);
+                setAutoRedirectCountdown(5);
+              }
+
               const trRes = await fetch(`/api/lectures/${completed.id}/transcripts`);
               if (trRes.ok) {
                 const trData = await trRes.json();
@@ -423,6 +429,7 @@ export default function LiveClassroomPage() {
           const isCurrentTeacher = user?.role === "TEACHER" || classroom?.teacherId === user?.id || urlRole === "teacher";
           if (!isCurrentTeacher) {
             setIsClassConcluded(true);
+            setAutoRedirectCountdown(5);
             stopCamera();
           }
         }
@@ -507,10 +514,22 @@ export default function LiveClassroomPage() {
     });
   }, []);
 
-  // Concluded state handling: keep student in room so they can review, scroll, and export captions freely
+  // Auto-redirect countdown when class is concluded for student - closes automatically
   useEffect(() => {
-    // If the lecture is concluded, allow user to freely read transcripts in place without forced kicking
-  }, [isClassConcluded]);
+    let timer = null;
+    if (isClassConcluded) {
+      if (autoRedirectCountdown > 0) {
+        timer = setTimeout(() => {
+          setAutoRedirectCountdown((prev) => prev - 1);
+        }, 1000);
+      } else {
+        router.push("/student/dashboard");
+      }
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isClassConcluded, autoRedirectCountdown, router]);
 
   // Download transcript summary helper
   const handleDownloadTranscript = () => {
@@ -1270,16 +1289,7 @@ export default function LiveClassroomPage() {
       {/* CLASS CONCLUDED OVERLAY FOR STUDENTS */}
       {isClassConcluded && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="relative w-full max-w-lg bg-white rounded-3xl border border-auralis-border shadow-2xl p-6 sm:p-8 text-center space-y-6">
-            <button
-              type="button"
-              onClick={() => setIsClassConcluded(false)}
-              aria-label="Close dialog to read captions"
-              className="absolute top-4 right-4 p-2 rounded-xl text-auralis-muted hover:text-auralis-text hover:bg-auralis-bg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
+          <div className="w-full max-w-lg bg-white rounded-3xl border border-auralis-border shadow-2xl p-6 sm:p-8 text-center space-y-6">
             <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-800 mx-auto flex items-center justify-center shadow-inner">
               <GraduationCap className="w-9 h-9 text-auralis-accent" />
             </div>
@@ -1292,7 +1302,7 @@ export default function LiveClassroomPage() {
                 Class Concluded by Instructor
               </h2>
               <p className="text-xs text-auralis-muted max-w-sm mx-auto leading-relaxed">
-                Your instructor has concluded today&apos;s live lecture. You can review all real-time captions directly in this room or open the full study view with AI notes and flashcards.
+                Your instructor has concluded today&apos;s live lecture. All real-time captions and transcripts have been safely archived to your dashboard.
               </p>
             </div>
 
@@ -1301,15 +1311,20 @@ export default function LiveClassroomPage() {
               <span className="font-mono font-bold text-auralis-text bg-white px-2.5 py-1 rounded-lg border border-auralis-border">{transcripts.length} entries</span>
             </div>
 
-            <div className="space-y-3 pt-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-3 pt-2">
+              <div className="text-xs font-semibold text-auralis-muted flex items-center justify-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-auralis-accent animate-spin" />
+                <span>Closing room &amp; redirecting in <span className="font-bold text-auralis-accent font-mono text-sm">{autoRedirectCountdown}</span>s...</span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsClassConcluded(false)}
-                  className="w-full py-2.5 px-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={handleDownloadTranscript}
+                  className="w-full py-2.5 px-3 rounded-xl border border-auralis-border text-xs font-bold text-auralis-text hover:bg-auralis-bg transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <FileText className="w-4 h-4" />
-                  <span>Review Captions Here</span>
+                  <Download className="w-4 h-4 text-auralis-accent" />
+                  <span>Download Transcript</span>
                 </button>
 
                 <button
@@ -1325,27 +1340,16 @@ export default function LiveClassroomPage() {
                   className="w-full py-2.5 px-3 rounded-xl bg-auralis-dark hover:bg-black text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-auralis-secondary" />
-                  <span>Full Notes &amp; Flashcards</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={handleDownloadTranscript}
-                  className="w-full py-2 px-3 rounded-xl border border-auralis-border text-xs font-semibold text-auralis-text hover:bg-auralis-bg transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-auralis-accent" />
-                  <span>Download .TXT</span>
+                  <span>View Notes &amp; Flashcards</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => router.push("/student/dashboard")}
-                  className="w-full py-2 px-3 rounded-xl border border-auralis-border text-xs font-semibold text-auralis-muted hover:text-auralis-text hover:bg-auralis-bg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 px-3 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <span>Student Dashboard</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>Close &amp; Return Now</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
