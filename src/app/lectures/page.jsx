@@ -19,6 +19,9 @@ import {
   FileText,
   Sun,
   Moon,
+  Trash2,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 
 export default function LectureHistoryPage() {
@@ -29,6 +32,10 @@ export default function LectureHistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | LIVE | COMPLETED
   const [isHighContrast, setIsHighContrast] = useState(false);
+  const [lectureToDelete, setLectureToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(null);
 
   useEffect(() => {
     try {
@@ -125,6 +132,42 @@ export default function LectureHistoryPage() {
 
   const dashboardHref =
     user?.role === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+
+  const canDeleteLecture = (lec) => {
+    if (!user) return false;
+    const role = (user.role || "").toUpperCase();
+    if (role === "ADMIN" || role === "TEACHER") return true;
+    if (lec.classroom?.teacherId && lec.classroom.teacherId === user.id) return true;
+    if (lec.classroom?.teacher?.id && lec.classroom.teacher.id === user.id) return true;
+    return false;
+  };
+
+  const handleDeleteLecture = async () => {
+    if (!lectureToDelete) return;
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+
+      const res = await fetch(`/api/lectures/${lectureToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete lecture");
+      }
+
+      setLectures((prev) => prev.filter((l) => l.id !== lectureToDelete.id));
+      setDeleteSuccess(`"${lectureToDelete.title}" has been permanently deleted.`);
+      setLectureToDelete(null);
+      setTimeout(() => setDeleteSuccess(null), 4000);
+    } catch (err) {
+      console.error("Delete lecture error:", err);
+      setDeleteError(err.message || "Failed to delete lecture");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -386,14 +429,14 @@ export default function LectureHistoryPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-auralis-border">
+                  <div className="flex items-center gap-2.5 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-auralis-border">
                     {isLive && (
                       <Link
                         href={`/classroom/${lec.classroom?.id || lec.classroomId}`}
                         className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-1.5"
                       >
                         <Radio className="w-3.5 h-3.5" />
-                        <span>Join Live Stream</span>
+                        <span>Join Live</span>
                       </Link>
                     )}
 
@@ -404,6 +447,25 @@ export default function LectureHistoryPage() {
                       <span>Review Transcript</span>
                       <ChevronRight className="w-4 h-4" />
                     </Link>
+
+                    {canDeleteLecture(lec) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setLectureToDelete(lec);
+                        }}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isHighContrast
+                            ? "border-red-400/50 bg-red-950/40 text-red-400 hover:bg-red-900/60"
+                            : "border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300"
+                        }`}
+                        title="Delete Lecture Session"
+                        aria-label={`Delete ${lec.title}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -411,6 +473,143 @@ export default function LectureHistoryPage() {
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Modal Notice */}
+      {lectureToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        >
+          <div
+            className={`w-full max-w-lg rounded-2xl border p-6 sm:p-7 shadow-2xl space-y-6 ${
+              isHighContrast
+                ? "bg-[#141E1B] border-red-500/40 text-white"
+                : "bg-white border-auralis-border text-auralis-text"
+            }`}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 border border-red-200 shrink-0 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading font-extrabold text-lg sm:text-xl text-red-600 dark:text-red-400">
+                    Delete Lecture Notice
+                  </h3>
+                  <button
+                    onClick={() => {
+                      if (!isDeleting) {
+                        setLectureToDelete(null);
+                        setDeleteError(null);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className="p-1 rounded-lg text-auralis-muted hover:text-auralis-text transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-xs text-auralis-muted mt-1">
+                  Please review this notice before confirming deletion.
+                </p>
+              </div>
+            </div>
+
+            {/* Lecture Details Summary Box */}
+            <div
+              className={`p-4 rounded-xl border text-xs space-y-2 ${
+                isHighContrast
+                  ? "bg-white/5 border-white/10"
+                  : "bg-auralis-bg border-auralis-border"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Lecture:</span>
+                <span className="font-bold text-right truncate max-w-[240px]">
+                  {lectureToDelete.title}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Classroom:</span>
+                <span className="font-bold">
+                  {lectureToDelete.classroom?.name || "Classroom"} (
+                  {lectureToDelete.classroom?.subject || "Subject"})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Recorded Captions:</span>
+                <span className="font-mono font-bold text-auralis-accent">
+                  {lectureToDelete._count?.transcripts || 0} blocks
+                </span>
+              </div>
+            </div>
+
+            {/* Warning Details */}
+            <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-xs text-red-800 dark:text-red-300 leading-relaxed space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                This action is permanent and cannot be undone.
+              </p>
+              <p>
+                Deleting this lecture will permanently erase it from the instructor archive,
+                all student dashboards, and the student lecture history. All associated caption
+                transcripts and study materials will be purged immediately.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-red-100 text-red-700 text-xs font-semibold">
+                {deleteError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLectureToDelete(null);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2.5 rounded-xl border border-auralis-border hover:bg-auralis-surface text-xs font-bold transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteLecture}
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting Lecture...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Notification Toast */}
+      {deleteSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-auralis-dark text-white border border-auralis-success/50 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <CheckCircle2 className="w-5 h-5 text-auralis-success shrink-0" />
+          <span className="text-xs font-bold">{deleteSuccess}</span>
+        </div>
+      )}
     </div>
   );
 }

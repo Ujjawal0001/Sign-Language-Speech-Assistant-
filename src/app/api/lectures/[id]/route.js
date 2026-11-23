@@ -179,3 +179,58 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ error: "Failed to update lecture" }, { status: 500 });
   }
 }
+
+// DELETE /api/lectures/[id] - Permanently delete a lecture and its transcripts
+export async function DELETE(req, { params }) {
+  try {
+    const user = await getSessionUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = params;
+    const lecture = await prisma.lecture.findUnique({
+      where: { id },
+      include: { classroom: true },
+    });
+
+    if (!lecture) {
+      return NextResponse.json({ error: "Lecture not found" }, { status: 404 });
+    }
+
+    // Allow if user is teacher of the classroom, has TEACHER role, or is ADMIN
+    const isClassTeacher = lecture.classroom?.teacherId === user.id;
+    const isTeacherRole = (user.role || "").toUpperCase() === "TEACHER";
+    const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
+
+    if (!isClassTeacher && !isAdmin && !isTeacherRole) {
+      return NextResponse.json(
+        { error: "Forbidden: Only instructors can delete lectures" },
+        { status: 403 }
+      );
+    }
+
+    // Explicitly cascade delete transcripts first to guarantee full cleanup
+    await prisma.transcript.deleteMany({
+      where: { lectureId: id },
+    });
+
+    // Delete the lecture record
+    await prisma.lecture.delete({
+      where: { id },
+    });
+
+    return NextResponse.json(
+      { message: "Lecture deleted successfully", id },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("DELETE Lecture [id] Error:", error);
+    return NextResponse.json({ error: "Failed to delete lecture" }, { status: 500 });
+  }
+}

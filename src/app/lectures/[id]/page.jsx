@@ -32,6 +32,9 @@ import {
   Quote,
   Sun,
   Moon,
+  Trash2,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 
 export default function LectureTranscriptViewPage() {
@@ -64,6 +67,57 @@ export default function LectureTranscriptViewPage() {
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [exportNotice, setExportNotice] = useState(null);
+
+  // User session & Delete State
+  const [user, setUser] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    loadUser();
+  }, []);
+
+  const canDelete =
+    user &&
+    ((user.role || "").toUpperCase() === "ADMIN" ||
+      (user.role || "").toUpperCase() === "TEACHER" ||
+      (lecture?.teacherId && lecture.teacherId === user.id));
+
+  const handleDeleteLecture = async () => {
+    if (!lectureId) return;
+    try {
+      setIsDeleting(true);
+      setDeleteError(null);
+
+      const res = await fetch(`/api/lectures/${lectureId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete lecture");
+      }
+
+      router.push("/lectures");
+    } catch (err) {
+      console.error("Delete lecture error:", err);
+      setDeleteError(err.message || "Failed to delete lecture");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -456,6 +510,26 @@ export default function LectureTranscriptViewPage() {
               <FileText className="w-3.5 h-3.5" />
               <span>JSON</span>
             </button>
+
+            {/* Delete Lecture (Instructor / Admin Only) */}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setShowDeleteModal(true);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                  isHighContrast
+                    ? "border-red-400/50 bg-red-950/40 text-red-400 hover:bg-red-900/60"
+                    : "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                }`}
+                title="Delete this lecture session"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1009,6 +1083,134 @@ export default function LectureTranscriptViewPage() {
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Modal Notice */}
+      {showDeleteModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        >
+          <div
+            className={`w-full max-w-lg rounded-2xl border p-6 sm:p-7 shadow-2xl space-y-6 ${
+              isHighContrast
+                ? "bg-[#141E1B] border-red-500/40 text-white"
+                : "bg-white border-auralis-border text-auralis-text"
+            }`}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 border border-red-200 shrink-0 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading font-extrabold text-lg sm:text-xl text-red-600 dark:text-red-400">
+                    Delete Lecture Notice
+                  </h3>
+                  <button
+                    onClick={() => {
+                      if (!isDeleting) {
+                        setShowDeleteModal(false);
+                        setDeleteError(null);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className="p-1 rounded-lg text-auralis-muted hover:text-auralis-text transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-xs text-auralis-muted mt-1">
+                  Please review this notice before confirming deletion.
+                </p>
+              </div>
+            </div>
+
+            {/* Lecture Details Summary Box */}
+            <div
+              className={`p-4 rounded-xl border text-xs space-y-2 ${
+                isHighContrast
+                  ? "bg-white/5 border-white/10"
+                  : "bg-auralis-bg border-auralis-border"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Lecture:</span>
+                <span className="font-bold text-right truncate max-w-[240px]">
+                  {lecture.title}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Classroom:</span>
+                <span className="font-bold">
+                  {lecture.classroomName} ({lecture.classroomSubject})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Recorded Captions:</span>
+                <span className="font-mono font-bold text-auralis-accent">
+                  {transcripts.length} blocks
+                </span>
+              </div>
+            </div>
+
+            {/* Warning Details */}
+            <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-xs text-red-800 dark:text-red-300 leading-relaxed space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                This action is permanent and cannot be undone.
+              </p>
+              <p>
+                Deleting this lecture will permanently erase it from the instructor archive,
+                all student dashboards, and the student lecture history. All associated caption
+                transcripts and study materials will be purged immediately.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-red-100 text-red-700 text-xs font-semibold">
+                {deleteError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2.5 rounded-xl border border-auralis-border hover:bg-auralis-surface text-xs font-bold transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteLecture}
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting Lecture...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -147,6 +147,7 @@ export async function GET(req) {
             name: true,
             subject: true,
             code: true,
+            teacherId: true,
             teacher: {
               select: { id: true, name: true },
             },
@@ -171,6 +172,7 @@ export async function GET(req) {
               name: true,
               subject: true,
               code: true,
+              teacherId: true,
               teacher: {
                 select: { id: true, name: true },
               },
