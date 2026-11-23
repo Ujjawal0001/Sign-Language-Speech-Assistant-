@@ -123,31 +123,29 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // 1. Find all lectures belonging to this classroom
-    const lectures = await prisma.lecture.findMany({
+    // Safety Check: Classroom cannot be deleted if there are still lectures inside it
+    const lectureCount = await prisma.lecture.count({
       where: { classroomId: id },
-      select: { id: true },
     });
 
-    // 2. Cascade delete all transcripts for these lectures first
-    if (lectures.length > 0) {
-      const lectureIds = lectures.map((l) => l.id);
-      await prisma.transcript.deleteMany({
-        where: { lectureId: { in: lectureIds } },
-      });
+    if (lectureCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete classroom: this classroom still contains ${lectureCount} lecture session${
+            lectureCount === 1 ? "" : "s"
+          }. Please delete all lectures inside this classroom first before deleting the classroom.`,
+          lectureCount,
+        },
+        { status: 400 }
+      );
     }
 
-    // 3. Cascade delete all lectures in this classroom
-    await prisma.lecture.deleteMany({
-      where: { classroomId: id },
-    });
-
-    // 4. Cascade delete all student enrollments (classroom members)
+    // Cascade delete all student enrollments (classroom members)
     await prisma.classroomMember.deleteMany({
       where: { classroomId: id },
     });
 
-    // 5. Delete the classroom itself
+    // Delete the classroom itself
     await prisma.classroom.delete({
       where: { id },
     });

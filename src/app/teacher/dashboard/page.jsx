@@ -36,6 +36,7 @@ import {
   Moon,
   Trash2,
   AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 
 export default function TeacherDashboard() {
@@ -1678,23 +1679,52 @@ export default function TeacherDashboard() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-auralis-muted font-semibold">Associated Lectures:</span>
-                <span className="font-mono font-bold text-auralis-accent">
-                  {classroomToDelete._count?.lectures || 0} lectures
+                <span
+                  className={`font-mono font-bold ${
+                    (classroomToDelete._count?.lectures || 0) > 0
+                      ? "text-amber-600"
+                      : "text-auralis-accent"
+                  }`}
+                >
+                  {classroomToDelete._count?.lectures || 0}{" "}
+                  {(classroomToDelete._count?.lectures || 0) > 0 ? "lectures (Protected)" : "lectures"}
                 </span>
               </div>
             </div>
 
-            {/* Warning Details */}
-            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 leading-relaxed space-y-1.5">
-              <p className="font-bold flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
-                This action is permanent and cannot be undone.
-              </p>
-              <p>
-                Deleting this classroom will remove it permanently from your dashboard and unenroll all students.
-                All lectures, live broadcast rooms, real-time caption transcripts, and study notes created in this classroom will be permanently deleted.
-              </p>
-            </div>
+            {/* Warning Details or Lecture Blocker Notice */}
+            {(classroomToDelete._count?.lectures || 0) > 0 ? (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-relaxed space-y-2">
+                <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                  Classroom Cannot Be Deleted (Contains Lectures)
+                </p>
+                <p>
+                  This classroom currently has{" "}
+                  <strong>
+                    {classroomToDelete._count?.lectures} recorded lecture
+                    {classroomToDelete._count?.lectures === 1 ? "" : "s"}
+                  </strong>
+                  . To protect student lecture history and caption records, a classroom cannot be
+                  deleted while it still contains lectures.
+                </p>
+                <p className="text-[11px] text-amber-700">
+                  Please open <strong>Lecture History</strong> and delete all lectures belonging to
+                  this classroom first before deleting the classroom.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 leading-relaxed space-y-1.5">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                  This action is permanent and cannot be undone.
+                </p>
+                <p>
+                  Deleting this classroom will remove it permanently from your dashboard and unenroll
+                  all students.
+                </p>
+              </div>
+            )}
 
             {deleteClassroomError && (
               <div className="p-3 rounded-xl bg-red-100 text-red-700 text-xs font-semibold">
@@ -1704,36 +1734,62 @@ export default function TeacherDashboard() {
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-auralis-border">
-              <button
-                type="button"
-                onClick={() => {
-                  setClassroomToDelete(null);
-                  setDeleteClassroomError("");
-                }}
-                disabled={isDeletingClassroom}
-                className="px-4 py-2.5 rounded-xl border border-auralis-border hover:bg-auralis-surface text-xs font-bold transition-all disabled:opacity-50"
-              >
-                Cancel
-              </button>
+              {(classroomToDelete._count?.lectures || 0) > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClassroomToDelete(null);
+                      setDeleteClassroomError("");
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-auralis-border hover:bg-auralis-surface text-xs font-bold transition-all"
+                  >
+                    Close
+                  </button>
 
-              <button
-                type="button"
-                onClick={handleDeleteClassroom}
-                disabled={isDeletingClassroom}
-                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {isDeletingClassroom ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Deleting Classroom...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4" />
-                    <span>Yes, Permanently Delete Classroom</span>
-                  </>
-                )}
-              </button>
+                  <Link
+                    href="/lectures"
+                    onClick={() => setClassroomToDelete(null)}
+                    className="px-4 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-1.5"
+                  >
+                    <span>View &amp; Delete Lectures</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClassroomToDelete(null);
+                      setDeleteClassroomError("");
+                    }}
+                    disabled={isDeletingClassroom}
+                    className="px-4 py-2.5 rounded-xl border border-auralis-border hover:bg-auralis-surface text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteClassroom}
+                    disabled={isDeletingClassroom}
+                    className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isDeletingClassroom ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Deleting Classroom...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>Yes, Permanently Delete Classroom</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
