@@ -34,6 +34,8 @@ import {
   EyeOff,
   Sun,
   Moon,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function TeacherDashboard() {
@@ -97,6 +99,40 @@ export default function TeacherDashboard() {
       setCreateLectureDashError("Failed to initialize lecture session");
     } finally {
       setIsCreatingLectureFromDash(false);
+    }
+  };
+
+  // Modal State for Delete Classroom
+  const [classroomToDelete, setClassroomToDelete] = useState(null);
+  const [isDeletingClassroom, setIsDeletingClassroom] = useState(false);
+  const [deleteClassroomError, setDeleteClassroomError] = useState("");
+  const [deleteClassroomSuccess, setDeleteClassroomSuccess] = useState("");
+
+  const handleDeleteClassroom = async () => {
+    if (!classroomToDelete) return;
+    try {
+      setIsDeletingClassroom(true);
+      setDeleteClassroomError("");
+
+      const res = await fetch(`/api/classrooms/${classroomToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete classroom");
+      }
+
+      // Remove deleted classroom from state
+      setClassrooms((prev) => prev.filter((c) => c.id !== classroomToDelete.id));
+      setDeleteClassroomSuccess(`"${classroomToDelete.name}" has been permanently deleted.`);
+      setClassroomToDelete(null);
+      setTimeout(() => setDeleteClassroomSuccess(""), 4000);
+    } catch (err) {
+      console.error("Delete classroom error:", err);
+      setDeleteClassroomError(err.message || "Failed to delete classroom");
+    } finally {
+      setIsDeletingClassroom(false);
     }
   };
 
@@ -690,6 +726,19 @@ export default function TeacherDashboard() {
                             <Play className="w-3.5 h-3.5 fill-white" />
                             <span>Enter Room</span>
                           </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteClassroomError("");
+                              setClassroomToDelete(cls);
+                            }}
+                            className="p-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 transition-all cursor-pointer"
+                            title="Delete Classroom"
+                            aria-label={`Delete ${cls.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -807,7 +856,7 @@ export default function TeacherDashboard() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center gap-2.5 pt-2">
                           <Link
                             href={`/classroom/${cls.id}?role=teacher`}
                             className="flex-1 py-2.5 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white text-xs font-bold text-center flex items-center justify-center gap-2 shadow-tactile transition-all"
@@ -821,6 +870,18 @@ export default function TeacherDashboard() {
                           >
                             Past Lectures
                           </Link>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteClassroomError("");
+                              setClassroomToDelete(cls);
+                            }}
+                            className="p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 transition-all cursor-pointer"
+                            title="Delete Classroom"
+                            aria-label={`Delete ${cls.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -938,6 +999,19 @@ export default function TeacherDashboard() {
                             <Play className="w-4 h-4 fill-white" />
                             <span>Enter Room</span>
                           </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteClassroomError("");
+                              setClassroomToDelete(cls);
+                            }}
+                            className="p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 transition-all cursor-pointer"
+                            title="Delete Classroom"
+                            aria-label={`Delete ${cls.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1541,6 +1615,135 @@ export default function TeacherDashboard() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Delete Classroom Confirmation Modal Notice */}
+      {classroomToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        >
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-auralis-border p-6 sm:p-7 space-y-6">
+            {/* Modal Header */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 border border-red-200 shrink-0 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading font-extrabold text-lg sm:text-xl text-red-600">
+                    Delete Classroom Notice
+                  </h3>
+                  <button
+                    onClick={() => {
+                      if (!isDeletingClassroom) {
+                        setClassroomToDelete(null);
+                        setDeleteClassroomError("");
+                      }
+                    }}
+                    disabled={isDeletingClassroom}
+                    className="p-1 rounded-lg text-auralis-muted hover:text-auralis-text transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-xs text-auralis-muted mt-1">
+                  Please review this notice before confirming classroom deletion.
+                </p>
+              </div>
+            </div>
+
+            {/* Classroom Details Summary Box */}
+            <div className="p-4 rounded-xl bg-auralis-bg border border-auralis-border text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Classroom Name:</span>
+                <span className="font-bold text-right truncate max-w-[240px]">
+                  {classroomToDelete.name}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Subject / Code:</span>
+                <span className="font-bold">
+                  {classroomToDelete.subject} ({classroomToDelete.code})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Enrolled Students:</span>
+                <span className="font-mono font-bold text-auralis-accent">
+                  {classroomToDelete._count?.members || 0} students
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-auralis-muted font-semibold">Associated Lectures:</span>
+                <span className="font-mono font-bold text-auralis-accent">
+                  {classroomToDelete._count?.lectures || 0} lectures
+                </span>
+              </div>
+            </div>
+
+            {/* Warning Details */}
+            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 leading-relaxed space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                This action is permanent and cannot be undone.
+              </p>
+              <p>
+                Deleting this classroom will remove it permanently from your dashboard and unenroll all students.
+                All lectures, live broadcast rooms, real-time caption transcripts, and study notes created in this classroom will be permanently deleted.
+              </p>
+            </div>
+
+            {deleteClassroomError && (
+              <div className="p-3 rounded-xl bg-red-100 text-red-700 text-xs font-semibold">
+                {deleteClassroomError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-auralis-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setClassroomToDelete(null);
+                  setDeleteClassroomError("");
+                }}
+                disabled={isDeletingClassroom}
+                className="px-4 py-2.5 rounded-xl border border-auralis-border hover:bg-auralis-surface text-xs font-bold transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteClassroom}
+                disabled={isDeletingClassroom}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-tactile transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeletingClassroom ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting Classroom...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Permanently Delete Classroom</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Classroom Success Toast */}
+      {deleteClassroomSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-auralis-dark text-white border border-auralis-success/50 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <CheckCircle2 className="w-5 h-5 text-auralis-success shrink-0" />
+          <span className="text-xs font-bold">{deleteClassroomSuccess}</span>
         </div>
       )}
     </div>
