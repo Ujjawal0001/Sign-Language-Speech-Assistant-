@@ -16,6 +16,8 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle2,
+  Check,
+  Lock,
 } from "lucide-react";
 
 function RegisterForm() {
@@ -44,6 +46,31 @@ function RegisterForm() {
   });
 
   const selectedRole = watch("role");
+  const emailValue = watch("email") || "";
+  const passwordValue = watch("password") || "";
+
+  // Live Email Validation Checks
+  const isEmailFormatValid = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailValue.trim());
+
+  // Live Password Validation Criteria
+  const passwordCriteria = [
+    { id: "len", label: "At least 8 characters", met: passwordValue.length >= 8 },
+    { id: "upper", label: "One uppercase letter (A-Z)", met: /[A-Z]/.test(passwordValue) },
+    { id: "lower", label: "One lowercase letter (a-z)", met: /[a-z]/.test(passwordValue) },
+    { id: "num", label: "One number (0-9)", met: /[0-9]/.test(passwordValue) },
+    { id: "sym", label: "One special character (!@#$%...)", met: /[^a-zA-Z0-9]/.test(passwordValue) },
+  ];
+
+  const metCriteriaCount = passwordCriteria.filter((c) => c.met).length;
+
+  const getStrengthMeta = () => {
+    if (!passwordValue) return { label: "", color: "bg-gray-200", text: "text-gray-400", width: "0%" };
+    if (metCriteriaCount <= 2) return { label: "Weak", color: "bg-red-500", text: "text-red-600", width: "30%" };
+    if (metCriteriaCount <= 4) return { label: "Moderate", color: "bg-amber-500", text: "text-amber-600", width: "70%" };
+    return { label: "Strong & Secure", color: "bg-emerald-500", text: "text-emerald-600", width: "100%" };
+  };
+
+  const strength = getStrengthMeta();
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -214,25 +241,44 @@ function RegisterForm() {
             </div>
 
             <div>
-              <label
-                htmlFor="email"
-                className="block text-xs font-bold uppercase tracking-wider text-auralis-text mb-2"
-              >
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                disabled={isLoading}
-                {...register("email")}
-                placeholder="name@university.edu"
-                className={`w-full px-4 py-3 rounded-xl bg-white border text-sm text-auralis-text placeholder:text-auralis-muted/60 transition-colors shadow-tactile focus:outline-none focus:ring-2 focus:ring-auralis-accent ${
-                  errors.email ? "border-red-400 bg-red-50/20" : "border-auralis-border"
-                }`}
-                aria-invalid={Boolean(errors.email)}
-                aria-describedby={errors.email ? "email-error" : undefined}
-              />
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="email"
+                  className="block text-xs font-bold uppercase tracking-wider text-auralis-text"
+                >
+                  Email Address
+                </label>
+                {emailValue && isEmailFormatValid && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span>Valid format</span>
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  disabled={isLoading}
+                  {...register("email")}
+                  placeholder="name@university.edu"
+                  className={`w-full px-4 py-3 rounded-xl bg-white border text-sm text-auralis-text placeholder:text-auralis-muted/60 transition-colors shadow-tactile focus:outline-none focus:ring-2 focus:ring-auralis-accent ${
+                    errors.email
+                      ? "border-red-400 bg-red-50/20"
+                      : isEmailFormatValid
+                      ? "border-emerald-500/70 focus:border-emerald-500"
+                      : "border-auralis-border"
+                  }`}
+                  aria-invalid={Boolean(errors.email)}
+                  aria-describedby={errors.email ? "email-error" : undefined}
+                />
+                {emailValue && isEmailFormatValid && (
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-600 pointer-events-none">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
               {errors.email && (
                 <p id="email-error" className="mt-1.5 text-xs text-red-600 font-medium">
                   {errors.email.message}
@@ -241,12 +287,19 @@ function RegisterForm() {
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-xs font-bold uppercase tracking-wider text-auralis-text mb-2"
-              >
-                Password (Min 6 Characters)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="password"
+                  className="block text-xs font-bold uppercase tracking-wider text-auralis-text"
+                >
+                  Password
+                </label>
+                {passwordValue && (
+                  <span className={`text-[11px] font-bold ${strength.text}`}>
+                    Strength: {strength.label}
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <input
                   id="password"
@@ -256,7 +309,11 @@ function RegisterForm() {
                   {...register("password")}
                   placeholder="Create a strong password"
                   className={`w-full px-4 py-3 rounded-xl bg-white border text-sm text-auralis-text placeholder:text-auralis-muted/60 transition-colors shadow-tactile pr-11 focus:outline-none focus:ring-2 focus:ring-auralis-accent ${
-                    errors.password ? "border-red-400 bg-red-50/20" : "border-auralis-border"
+                    errors.password
+                      ? "border-red-400 bg-red-50/20"
+                      : metCriteriaCount === 5
+                      ? "border-emerald-500/70"
+                      : "border-auralis-border"
                   }`}
                   aria-invalid={Boolean(errors.password)}
                   aria-describedby={errors.password ? "password-error" : undefined}
@@ -270,6 +327,45 @@ function RegisterForm() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* Password Strength Progress Bar */}
+              {passwordValue && (
+                <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${strength.color}`}
+                    style={{ width: strength.width }}
+                  />
+                </div>
+              )}
+
+              {/* Password Requirement Checklist */}
+              <div className="mt-2.5 p-3 rounded-xl bg-white border border-auralis-border shadow-sm text-xs space-y-1.5">
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-auralis-muted block mb-1">
+                  Password Requirements:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {passwordCriteria.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`flex items-center gap-1.5 text-[11px] transition-colors ${
+                        c.met
+                          ? "text-emerald-700 font-bold"
+                          : "text-auralis-muted opacity-80"
+                      }`}
+                    >
+                      <div
+                        className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ${
+                          c.met ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-400"
+                        }`}
+                      >
+                        {c.met ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : <span className="w-1 h-1 rounded-full bg-gray-400" />}
+                      </div>
+                      <span>{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {errors.password && (
                 <p id="password-error" className="mt-1.5 text-xs text-red-600 font-medium">
                   {errors.password.message}
