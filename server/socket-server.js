@@ -78,12 +78,10 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      socket.to(r).emit("caption-interim", {
-        text: payload?.text || "",
-        source: payload?.source || "SPEECH",
-      });
-    }
+    socket.to(Array.from(rooms)).emit("caption-interim", {
+      text: payload?.text || "",
+      source: payload?.source || "SPEECH",
+    });
   });
 
   // Final caption segment (speech or gesture)
@@ -97,9 +95,7 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("caption-final", transcript);
-    }
+    io.to(Array.from(rooms)).emit("caption-final", transcript);
   });
 
   // Sign Language Gesture detected
@@ -113,13 +109,11 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("sign-detected", {
-        gesture,
-        confidence: payload?.confidence || 1.0,
-        timestamp: payload?.timestamp || new Date().toISOString(),
-      });
-    }
+    io.to(Array.from(rooms)).emit("sign-detected", {
+      gesture,
+      confidence: payload?.confidence || 1.0,
+      timestamp: payload?.timestamp || new Date().toISOString(),
+    });
   });
 
   // Lecture status changes (LIVE, PAUSED, COMPLETED)
@@ -136,9 +130,7 @@ io.on("connection", (socket) => {
     }
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("lecture-status-change", { status, lectureId });
-    }
+    io.to(Array.from(rooms)).emit("lecture-status-change", { status, lectureId });
   });
 
   // Student Doubt / Raise Hand via Sign Language or Click
@@ -151,16 +143,15 @@ io.on("connection", (socket) => {
     if (rooms.size === 0) return;
 
     const doubtData = {
+      id: payload?.id || `doubt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       studentId: payload?.studentId || socket.data?.userId,
       studentName: payload?.studentName || socket.data?.userName || "Student",
       gesture: payload?.gesture || "QUESTION",
       question: payload?.question || "",
-      timestamp: new Date().toISOString(),
+      timestamp: payload?.timestamp || new Date().toISOString(),
     };
 
-    for (const r of rooms) {
-      io.to(r).emit("student-doubt-raised", doubtData);
-    }
+    io.to(Array.from(rooms)).emit("student-doubt-raised", doubtData);
   });
 
   // Instructor Acknowledges Student Doubt
@@ -172,12 +163,10 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("student-doubt-acknowledged", {
-        studentId: payload?.studentId,
-        studentName: payload?.studentName,
-      });
-    }
+    io.to(Array.from(rooms)).emit("student-doubt-acknowledged", {
+      studentId: payload?.studentId,
+      studentName: payload?.studentName,
+    });
   });
 
   // In-Class Live Poll Launch
@@ -189,9 +178,7 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("poll-launch", payload);
-    }
+    io.to(Array.from(rooms)).emit("poll-launch", payload);
   });
 
   // In-Class Live Poll Vote (Sign, Voice or Click)
@@ -203,9 +190,7 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("poll-vote-update", payload);
-    }
+    io.to(Array.from(rooms)).emit("poll-vote-update", payload);
   });
 
   // In-Class Live Poll End
@@ -217,9 +202,7 @@ io.on("connection", (socket) => {
     if (classroomId) rooms.add(`class_${classroomId}`);
     if (rooms.size === 0) return;
 
-    for (const r of rooms) {
-      io.to(r).emit("poll-end", payload);
-    }
+    io.to(Array.from(rooms)).emit("poll-end", payload);
   });
 
   // Leave lecture room

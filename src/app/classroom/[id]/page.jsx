@@ -465,18 +465,42 @@ export default function LiveClassroomPage() {
   // Student Doubt Socket Listeners
   const handleSocketStudentDoubtRaised = useCallback(
     (doubtData) => {
+      if (!doubtData) return;
+      const doubtKey = doubtData.id || `${doubtData.studentId}-${doubtData.timestamp}-${doubtData.question || doubtData.gesture}`;
+
       if (isTeacher) {
-        setPendingDoubts((prev) => [...prev, doubtData]);
+        setPendingDoubts((prev) => {
+          const isDuplicate = prev.some(
+            (d) =>
+              (d.id && d.id === doubtKey) ||
+              (d.studentId === doubtData.studentId &&
+                d.timestamp === doubtData.timestamp &&
+                (d.question || "") === (doubtData.question || ""))
+          );
+          if (isDuplicate) return prev;
+          return [...prev, { ...doubtData, id: doubtKey }];
+        });
       }
-      const doubtTranscript = {
-        id: `doubt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        text: `✋ [Doubt / Question from ${doubtData.studentName}]: "${doubtData.question || doubtData.gesture}"`,
-        source: "SIGN_LANGUAGE",
-        confidence: 1.0,
-        timestamp: doubtData.timestamp || new Date().toISOString(),
-        speaker: { name: doubtData.studentName },
-      };
-      setTranscripts((prev) => [...prev, doubtTranscript]);
+
+      const doubtText = `✋ [Doubt / Question from ${doubtData.studentName}]: "${doubtData.question || doubtData.gesture}"`;
+      setTranscripts((prev) => {
+        // Prevent duplicate consecutive doubt transcript entries
+        const isDuplicateRecent = prev.slice(-4).some(
+          (t) =>
+            t.text === doubtText &&
+            Math.abs(new Date(t.timestamp).getTime() - new Date(doubtData.timestamp || Date.now()).getTime()) < 4000
+        );
+        if (isDuplicateRecent) return prev;
+        const doubtTranscript = {
+          id: `doubt-${doubtKey}`,
+          text: doubtText,
+          source: "SIGN_LANGUAGE",
+          confidence: 1.0,
+          timestamp: doubtData.timestamp || new Date().toISOString(),
+          speaker: { name: doubtData.studentName },
+        };
+        return [...prev, doubtTranscript];
+      });
     },
     [isTeacher]
   );
@@ -1085,33 +1109,25 @@ export default function LiveClassroomPage() {
     }
   };
 
-  // Sign Language Multimodal Shortcut for Polls & Doubts
+  // Sign Language Multimodal Shortcut for Live In-Class Polls
   useEffect(() => {
     if (!activeGesture?.isSign || isTeacher) return;
 
     const g = String(activeGesture.gesture).toUpperCase();
 
-    // 1. If active poll is open and student hasn't voted: detect A, B, C, D gestures
+    // If active poll is open and student hasn't voted: detect A, B, C, D gestures
     if (activePoll && !activePoll.isEnded && userVotedOptionIndex === null) {
       const letterIndex = ["A", "B", "C", "D"].indexOf(g);
       if (letterIndex !== -1 && letterIndex < activePoll.options.length) {
         handleStudentVotePoll(letterIndex, "SIGN_GESTURE");
       }
     }
-
-    // 2. If student signs QUESTION or HELP: automatically raise doubt
-    if ((g === "QUESTION" || g === "HELP") && !isDoubtPending) {
-      setIsDoubtPending(true);
-      raiseStudentDoubt({ gesture: g, question: `Raised doubt via sign gesture: ${g}` });
-    }
   }, [
     activeGesture,
     isTeacher,
     activePoll,
     userVotedOptionIndex,
-    isDoubtPending,
     handleStudentVotePoll,
-    raiseStudentDoubt,
   ]);
 
   // Filter transcripts by search query if user searches

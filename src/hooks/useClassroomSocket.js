@@ -260,13 +260,16 @@ export function useClassroomSocket({
   const raiseStudentDoubt = useCallback(
     ({ gesture = "QUESTION", question = "" } = {}) => {
       if (socketRef.current && socketRef.current.connected) {
+        const doubtId = `doubt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
         socketRef.current.emit("student-doubt-raised", {
+          id: doubtId,
           lectureId: activeRoomId,
           classroomId,
           studentId: user?.id,
           studentName: user?.name || "Student",
           gesture,
           question,
+          timestamp: new Date().toISOString(),
         });
       }
     },
