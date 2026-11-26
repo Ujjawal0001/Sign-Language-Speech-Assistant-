@@ -119,7 +119,19 @@ export function useGestureRecognition({
 
             // 2. Classify gesture
             const classification = classifyHandGesture(landmarks);
-            setActiveGesture(classification);
+            setActiveGesture((prev) => {
+              if (!classification && !prev) return prev;
+              if (
+                classification &&
+                prev &&
+                classification.gesture === prev.gesture &&
+                classification.isSign === prev.isSign &&
+                Math.round((classification.confidence || 0) * 10) === Math.round((prev.confidence || 0) * 10)
+              ) {
+                return prev;
+              }
+              return classification;
+            });
 
             // 3. Stabilize and debounce
             const stabilized = stabilizerRef.current.process(classification);
@@ -127,7 +139,7 @@ export function useGestureRecognition({
               onGestureDetected(stabilized);
             }
           } else {
-            setActiveGesture(null);
+            setActiveGesture((prev) => (prev === null ? prev : null));
             stabilizerRef.current.process(null);
           }
         }

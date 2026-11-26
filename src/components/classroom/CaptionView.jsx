@@ -15,7 +15,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 
-export default function CaptionView({
+const CaptionView = React.memo(function CaptionView({
   transcripts = [],
   interimText = "",
   activeSign = null,
@@ -31,6 +31,8 @@ export default function CaptionView({
 }) {
   const scrollContainerRef = useRef(null);
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
+  const lastTranscriptsCountRef = useRef(transcripts.length);
+  const lastInterimRef = useRef(interimText);
 
   // Determine typography size class based on user's preference
   const getTypographyClass = () => {
@@ -61,13 +63,19 @@ export default function CaptionView({
     }
   };
 
-  // Scroll to bottom smoothly unless user scrolled up intentionally
+  // Scroll to bottom smoothly ONLY when new transcripts or interim words arrive
+  // Never jumps or resets when toggling camera, microphone, or changing window size
   useEffect(() => {
-    if (!userHasScrolledUp && scrollContainerRef.current) {
+    const hasNewTranscript = transcripts.length > lastTranscriptsCountRef.current;
+    const hasNewInterim = Boolean(interimText && interimText !== lastInterimRef.current);
+    lastTranscriptsCountRef.current = transcripts.length;
+    lastInterimRef.current = interimText;
+
+    if (!userHasScrolledUp && scrollContainerRef.current && (hasNewTranscript || hasNewInterim || activeSign)) {
       scrollContainerRef.current.scrollTop =
         scrollContainerRef.current.scrollHeight;
     }
-  }, [transcripts, interimText, activeSign, userHasScrolledUp]);
+  }, [transcripts.length, interimText, activeSign, userHasScrolledUp]);
 
   // Handle scroll events to detect if user is browsing past captions
   const handleScroll = () => {
@@ -135,6 +143,51 @@ export default function CaptionView({
           </div>
         </div>
       )}
+
+      {/* Fixed Status Banner Bar (Placed outside scroll container so toggling mic/camera never jumps or shifts transcript scroll) */}
+      {lectureStatus === "COMPLETED" ? (
+        <div className="shrink-0 px-6 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-950 dark:text-emerald-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 z-10">
+          <div className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>This lecture has concluded and cannot be restarted. All captions are preserved and accessible in lecture history.</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {isTeacher && onOpenCreateLectureModal && (
+              <button
+                type="button"
+                onClick={onOpenCreateLectureModal}
+                className="px-3 py-1 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-bold text-xs shadow-tactile transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create New Lecture</span>
+              </button>
+            )}
+            <Link
+              href="/lectures"
+              className="px-3 py-1 rounded-xl bg-auralis-dark hover:bg-black text-white font-bold text-xs shadow-tactile transition-all flex items-center gap-1"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Lecture History</span>
+            </Link>
+          </div>
+        </div>
+      ) : isTeacher && !isListening ? (
+        <div className="shrink-0 px-6 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 z-10">
+          <div className="flex items-center gap-2 font-semibold">
+            <Mic className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Microphone is paused. Spoken words will resume appearing in the caption stream when unmuted.</span>
+          </div>
+          {onStartSpeech && (
+            <button
+              type="button"
+              onClick={onStartSpeech}
+              className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] shadow-sm transition-all shrink-0 cursor-pointer"
+            >
+              Resume Mic
+            </button>
+          )}
+        </div>
+      ) : null}
 
       {/* Main Scrollable Viewport (Fixed Height Container) */}
       <div
@@ -226,76 +279,6 @@ export default function CaptionView({
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Concluded Lecture Banner (Permanent status indicator) */}
-            {lectureStatus === "COMPLETED" && (
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-                <div className="flex items-center gap-2.5 font-semibold">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>This lecture has concluded and cannot be restarted. All captions are preserved and accessible in lecture history.</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  {isTeacher && onOpenCreateLectureModal && (
-                    <button
-                      type="button"
-                      onClick={onOpenCreateLectureModal}
-                      className="px-3.5 py-2 rounded-xl bg-auralis-accent hover:bg-auralis-accent-hover text-white font-bold text-xs shadow-tactile transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Create New Lecture</span>
-                    </button>
-                  )}
-                  <Link
-                    href="/lectures"
-                    className="px-3.5 py-2 rounded-xl bg-auralis-dark hover:bg-black text-white font-bold text-xs shadow-tactile transition-all flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Lecture History</span>
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* Teacher Mic Status & Real-time Level Feedback (Only when lecture is NOT concluded) */}
-            {lectureStatus !== "COMPLETED" && isTeacher && !isListening && (
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
-                <div className="flex items-center gap-2 font-semibold">
-                  <Mic className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Microphone is paused. Spoken words will not appear in the caption block until you resume.</span>
-                </div>
-                {onStartSpeech && (
-                  <button
-                    type="button"
-                    onClick={onStartSpeech}
-                    className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition-all shrink-0 cursor-pointer"
-                  >
-                    Resume Microphone
-                  </button>
-                )}
-              </div>
-            )}
-
-            {lectureStatus !== "COMPLETED" && isTeacher && isListening && (
-              <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] font-mono flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  <span>Speech Analyzer Active</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-auralis-muted">Mic Volume:</span>
-                  <div className="w-16 h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      style={{ width: `${Math.min(100, micLevel * 2)}%` }}
-                      className="h-full bg-emerald-500 transition-all duration-75"
-                    />
-                  </div>
-                  {isSpeaking && (
-                    <span className="text-[10px] text-emerald-600 font-bold uppercase ml-1 animate-pulse">
-                      Voice Detected
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* Finalized Transcripts formatted in spacious editorial layout */}
             {transcripts.map((t, idx) => {
@@ -456,4 +439,6 @@ export default function CaptionView({
       </div>
     </div>
   );
-}
+});
+
+export default CaptionView;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
@@ -441,11 +441,16 @@ export default function LiveClassroomPage() {
           return;
         }
 
+        const isBrandNewLectureSession = Boolean(lectureId && activeLecId && lectureId !== activeLecId);
+
         setLectureStatus(status);
         if (status === "LIVE") {
           setIsClassConcluded(false);
-          setTranscripts([]);
-          setDuration(0);
+          // Only reset transcripts and duration when a brand-new lecture session is started
+          if (isBrandNewLectureSession) {
+            setTranscripts([]);
+            setDuration(0);
+          }
         } else if (status === "COMPLETED") {
           stopCamera();
           if (!isTeacher) {
@@ -900,8 +905,13 @@ export default function LiveClassroomPage() {
     handleCreateNewLecture();
   };
 
-  // Teacher Action: Pause / Resume Speech Recognition
-  const handlePauseResumeRecognition = () => {
+  const handleOpenCreateLectureModal = useCallback(() => {
+    setIsCreateLectureModalOpen(true);
+  }, []);
+
+  // Teacher Action: Pause / Resume Speech Recognition (Mute / Unmute Microphone)
+  // Toggling microphone should only pause or resume speech recognition; it does NOT alter lecture status or wipe captions
+  const handlePauseResumeRecognition = useCallback(() => {
     if (!isTeacher) return;
     // Strictly prevent starting/resuming if lecture is concluded, scheduled, or not created yet
     if (lectureStatus === "COMPLETED" || lectureStatus === "SCHEDULED" || !currentLectureRef.current) {
@@ -910,14 +920,10 @@ export default function LiveClassroomPage() {
     }
     if (isListening) {
       stopListening();
-      setLectureStatus("PAUSED");
-      updateLectureStatus("PAUSED");
     } else {
       startListening();
-      setLectureStatus("LIVE");
-      updateLectureStatus("LIVE");
     }
-  };
+  }, [isTeacher, lectureStatus, isListening, stopListening, startListening]);
 
   // Teacher Action: Conclude Lecture
   const handleEndLecture = async () => {
@@ -1130,12 +1136,12 @@ export default function LiveClassroomPage() {
     handleStudentVotePoll,
   ]);
 
-  // Filter transcripts by search query if user searches
-  const filteredTranscripts = searchQuery.trim()
-    ? transcripts.filter((t) =>
-        t.text.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : transcripts;
+  // Filter transcripts by search query with memoization so it only updates when transcripts or search query changes
+  const filteredTranscripts = useMemo(() => {
+    if (!searchQuery.trim()) return transcripts;
+    const q = searchQuery.toLowerCase();
+    return transcripts.filter((t) => t.text.toLowerCase().includes(q));
+  }, [transcripts, searchQuery]);
 
   if (isLoading) {
     return (
@@ -1280,7 +1286,7 @@ export default function LiveClassroomPage() {
             onStartLecture={handleStartLecture}
             onPauseResumeRecognition={handlePauseResumeRecognition}
             onEndLecture={handleEndLecture}
-            onOpenCreateLectureModal={() => setIsCreateLectureModalOpen(true)}
+            onOpenCreateLectureModal={handleOpenCreateLectureModal}
             speechError={speechError}
             isActionLoading={isActionLoading || isCreatingLecture}
             isCameraActive={isCameraActive}
@@ -1319,7 +1325,7 @@ export default function LiveClassroomPage() {
               lectureStatus={lectureStatus}
               isTeacher={isTeacher}
               onStartSpeech={handlePauseResumeRecognition}
-              onOpenCreateLectureModal={() => setIsCreateLectureModalOpen(true)}
+              onOpenCreateLectureModal={handleOpenCreateLectureModal}
               micLevel={micLevel}
               isSpeaking={isSpeaking}
             />
